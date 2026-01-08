@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_api_key: str = ""
 
+    deepseek_api_key: str = ""
+
+    siliconflow_api_key: str = ""
+    embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    embedding_api_url: str = "https://api.siliconflow.cn/v1/embeddings"
+    
+    use_local_embedding: bool = True
+    local_embedding_model: str = "BAAI/bge-small-zh-v1.5"
+
     log_level: str = "INFO"
     debug: bool = False
 

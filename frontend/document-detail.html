@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档详情 - RAG 系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">RAG 系统</h1>
+                <nav class="nav">
+                    <a href="/index.html" class="nav-link">首页</a>
+                    <a href="/documents.html" class="nav-link">文档管理</a>
+                    <a href="/upload.html" class="nav-link">上传文档</a>
+                    <a href="/qa.html" class="nav-link">智能问答</a>
+                </nav>
+            </div>
+        </header>
+
+        <main class="main">
+            <section class="document-detail-section">
+                <div class="section-header">
+                    <a href="/documents.html" class="btn btn-secondary">← 返回</a>
+                    <h2 class="section-title" id="documentTitle">文档详情</h2>
+                </div>
+
+                <div class="document-info">
+                    <div class="info-item">
+                        <span class="info-label">文件名:</span>
+                        <span class="info-value" id="fileName">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">文件类型:</span>
+                        <span class="info-value" id="fileType">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">上传时间:</span>
+                        <span class="info-value" id="uploadTime">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Chunk 数量:</span>
+                        <span class="info-value" id="chunkCount">-</span>
+                    </div>
+                </div>
+
+                <div class="chunks-header">
+                    <h3 class="chunks-title">Chunk 列表</h3>
+                    <div class="chunks-filters">
+                        <select id="statusFilter" class="form-select">
+                            <option value="all">全部状态</option>
+                            <option value="active">活跃</option>
+                            <option value="deprecated">已废弃</option>
+                            <option value="inactive">非活跃</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="chunksList" class="chunks-list">
+                    <div class="loading">加载中...</div>
+                </div>
+
+                <div id="chunksEmpty" class="empty-state hidden">
+                    <div class="empty-icon">📝</div>
+                    <h3 class="empty-title">暂无 Chunk</h3>
+                    <p class="empty-description">该文档还没有分块</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        </footer>
+    </div>
+
+    <div id="chunkModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">编辑 Chunk</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">内容</label>
+                    <textarea id="chunkContent" class="form-textarea" rows="10"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">状态</label>
+                    <select id="chunkStatus" class="form-select">
+                        <option value="active">活跃</option>
+                        <option value="deprecated">已废弃</option>
+                        <option value="inactive">非活跃</option>
+                    </select>
+                </div>
+                <div id="deletionReasonGroup" class="form-group hidden">
+                    <label class="form-label">删除原因</label>
+                    <select id="deletionReason" class="form-select">
+                        <option value="low_answerability">可回答性低</option>
+                        <option value="redundant">内容重复</option>
+                        <option value="outdated">内容过时</option>
+                        <option value="error">错误内容</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modalCancel">取消</button>
+                <button class="btn btn-primary" id="modalSave">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/document-detail.js"></script>
+</body>
+</html>

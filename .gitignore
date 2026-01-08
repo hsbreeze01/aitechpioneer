@@ -25,3 +25,6 @@ wheels/
 .DS_Store
 .vscode/
 .trae/
+models/
+test_document.txt
+test_rag.py

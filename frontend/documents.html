@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档管理 - RAG 系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">RAG 系统</h1>
+                <nav class="nav">
+                    <a href="/index.html" class="nav-link">首页</a>
+                    <a href="/documents.html" class="nav-link active">文档管理</a>
+                    <a href="/upload.html" class="nav-link">上传文档</a>
+                    <a href="/qa.html" class="nav-link">智能问答</a>
+                </nav>
+            </div>
+        </header>
+
+        <main class="main">
+            <section class="documents-section">
+                <div class="section-header">
+                    <h2 class="section-title">文档列表</h2>
+                    <a href="/upload.html" class="btn btn-primary">上传文档</a>
+                </div>
+
+                <div id="documentsList" class="documents-list">
+                    <div class="loading">加载中...</div>
+                </div>
+
+                <div id="emptyState" class="empty-state hidden">
+                    <div class="empty-icon">📄</div>
+                    <h3 class="empty-title">暂无文档</h3>
+                    <p class="empty-description">开始上传您的第一个文档吧</p>
+                    <a href="/upload.html" class="btn btn-primary">上传文档</a>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/documents.js"></script>
+</body>
+</html>
