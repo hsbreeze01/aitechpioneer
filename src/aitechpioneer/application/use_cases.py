@@ -392,7 +392,7 @@ class RAGUseCase:
         question: str,
         collection_name: str = "documents",
         limit: int = 5,
-        score_threshold: float = 0.7,
+        score_threshold: float = 0.5,
         conversation_history: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         logger.info(f"Answering question: {question}")
@@ -409,6 +409,7 @@ class RAGUseCase:
                 query_vector=question_embedding,
                 limit=limit,
                 score_threshold=score_threshold,
+                status_filter=ChunkStatus.ACTIVE,
             )
 
             if not chunks_with_scores:

@@ -46,6 +46,7 @@ async function askQuestion() {
     
     const useContext = document.getElementById('useContext').checked;
     const topK = parseInt(document.getElementById('topK').value) || 5;
+    const scoreThreshold = parseFloat(document.getElementById('scoreThreshold').value) || 0.5;
     
     const answerSection = document.getElementById('answerSection');
     const answerContent = document.getElementById('answerContent');
@@ -63,7 +64,7 @@ async function askQuestion() {
                 question: question,
                 collection_name: 'documents',
                 limit: topK,
-                score_threshold: 0.7,
+                score_threshold: scoreThreshold,
             }),
         });
         

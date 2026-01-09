@@ -143,7 +143,7 @@ class QuestionRequest(BaseModel):
     question: str = Field(..., description="Question to answer")
     collection_name: Optional[str] = Field("documents", description="Collection name to search")
     limit: Optional[int] = Field(5, description="Number of chunks to retrieve", ge=1, le=20)
-    score_threshold: Optional[float] = Field(0.7, description="Minimum similarity score", ge=0.0, le=1.0)
+    score_threshold: Optional[float] = Field(0.5, description="Minimum similarity score", ge=0.0, le=1.0)
     conversation_history: Optional[List[Dict]] = Field(None, description="Conversation history for context")
 
 
