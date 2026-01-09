@@ -124,6 +124,16 @@ class ChunkUndoMergeResponse(BaseModel):
     restored_chunk_ids: List[str]
 
 
+class ChunkRecommendMergeRequest(BaseModel):
+    similarity_threshold: Optional[float] = Field(0.85, description="Minimum similarity threshold for recommendations", ge=0.0, le=1.0)
+    max_recommendations: Optional[int] = Field(10, description="Maximum number of recommendations", ge=1, le=50)
+
+
+class ChunkRecommendMergeResponse(BaseModel):
+    recommendations: List[Dict[str, Any]]
+    message: str
+
+
 class ChunkDeleteResponse(BaseModel):
     chunk_id: str
     message: str
@@ -491,6 +501,36 @@ async def undo_merge_chunks(
         raise
     except Exception as e:
         logger.error(f"Error undoing chunk merge: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/api/chunks/recommend-merges",
+    response_model=ChunkRecommendMergeResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def recommend_merges(
+    request: ChunkRecommendMergeRequest,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _ = get_use_cases()
+
+        recommendations = await chunk_manager_use_case.recommend_merges(
+            collection_name=collection_name,
+            similarity_threshold=request.similarity_threshold or 0.85,
+            max_recommendations=request.max_recommendations or 10,
+        )
+
+        return ChunkRecommendMergeResponse(
+            message=f"Found {len(recommendations)} merge recommendations",
+            recommendations=recommendations,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error recommending merges: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

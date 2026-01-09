@@ -28,6 +28,11 @@
                 <div class="section-header">
                     <h2 class="section-title">Chunk 管理</h2>
                     <div class="section-actions">
+                        <div class="quick-locate">
+                            <input type="text" id="documentIdInput" class="input-field" placeholder="输入文档 ID 快速定位">
+                            <button id="locateButton" class="btn btn-small btn-primary">定位</button>
+                            <button id="clearLocateButton" class="btn btn-small btn-secondary">清除</button>
+                        </div>
                         <select id="statusFilter" class="select-input">
                             <option value="">全部状态</option>
                             <option value="active">活跃</option>
@@ -39,9 +44,18 @@
                             <option value="parent">父块</option>
                             <option value="child">子块</option>
                         </select>
-                        <button id="mergeButton" class="btn btn-primary" disabled>合并选中</button>
-                        <button id="refreshButton" class="btn btn-secondary">刷新</button>
+                        <button id="mergeButton" class="btn btn-small btn-primary" disabled>合并选中</button>
+                        <button id="recommendButton" class="btn btn-small btn-info">智能推荐</button>
+                        <button id="refreshButton" class="btn btn-small btn-secondary">刷新</button>
                     </div>
+                </div>
+
+                <div id="recommendationsSection" class="recommendations-section hidden">
+                    <div class="recommendations-header">
+                        <h3 class="recommendations-title">智能推荐</h3>
+                        <button id="closeRecommendations" class="btn btn-small btn-secondary">关闭</button>
+                    </div>
+                    <div id="recommendationsList" class="recommendations-list"></div>
                 </div>
 
                 <div id="chunksList" class="chunks-list">

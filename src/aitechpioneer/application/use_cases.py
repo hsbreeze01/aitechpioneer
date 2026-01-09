@@ -309,6 +309,72 @@ class ChunkManagerUseCase:
             logger.error(f"Error deleting chunk: {e}")
             raise
 
+    async def recommend_merges(
+        self,
+        collection_name: str = "documents",
+        similarity_threshold: float = 0.85,
+        max_recommendations: int = 10,
+    ) -> List[Dict[str, Any]]:
+        logger.info(f"Recommending chunk merges (threshold={similarity_threshold})")
+
+        try:
+            all_chunks = await self.vector_database.get_all_chunks(collection_name)
+            active_chunks = [c for c in all_chunks if c.status == ChunkStatus.ACTIVE]
+            
+            active_chunks.sort(key=lambda x: (x.document_id, x.chunk_index, x.start_char))
+            
+            recommendations = []
+            
+            for i in range(len(active_chunks) - 1):
+                chunk1 = active_chunks[i]
+                chunk2 = active_chunks[i + 1]
+                
+                if chunk1.document_id != chunk2.document_id:
+                    continue
+                
+                if chunk1.merged_from or chunk2.merged_from:
+                    continue
+                
+                if len(chunk1.embedding) == 0 or len(chunk2.embedding) == 0:
+                    continue
+                
+                similarity = self._calculate_cosine_similarity(chunk1.embedding, chunk2.embedding)
+                
+                if similarity >= similarity_threshold:
+                    recommendations.append({
+                        "chunk_id_1": str(chunk1.chunk_id),
+                        "chunk_id_2": str(chunk2.chunk_id),
+                        "document_id": chunk1.document_id,
+                        "similarity": similarity,
+                        "chunk_1_content": chunk1.content[:100] + "..." if len(chunk1.content) > 100 else chunk1.content,
+                        "chunk_2_content": chunk2.content[:100] + "..." if len(chunk2.content) > 100 else chunk2.content,
+                    })
+            
+            recommendations.sort(key=lambda x: x["similarity"], reverse=True)
+            recommendations = recommendations[:max_recommendations]
+            
+            logger.info(f"Found {len(recommendations)} merge recommendations")
+            return recommendations
+
+        except Exception as e:
+            logger.error(f"Error recommending merges: {e}")
+            raise
+
+    def _calculate_cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        import math
+        
+        if len(vec1) != len(vec2):
+            return 0.0
+        
+        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        magnitude1 = math.sqrt(sum(a * a for a in vec1))
+        magnitude2 = math.sqrt(sum(b * b for b in vec2))
+        
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+        
+        return dot_product / (magnitude1 * magnitude2)
+
 
 class RAGUseCase:
     def __init__(

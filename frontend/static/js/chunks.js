@@ -1,6 +1,8 @@
 const API_BASE_URL = 'http://localhost:8001/api';
 let selectedChunks = new Set();
 let allChunks = [];
+let locateMode = false;
+let locatedDocumentId = null;
 
 async function fetchAPI(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -152,6 +154,10 @@ async function loadChunks() {
         const response = await fetchAPI('/chunks');
         allChunks = response.chunks;
         let chunks = [...allChunks];
+        
+        if (locateMode && locatedDocumentId) {
+            chunks = chunks.filter(c => c.document_id.includes(locatedDocumentId));
+        }
         
         if (statusFilter.value) {
             chunks = chunks.filter(c => c.status === statusFilter.value);
@@ -306,16 +312,165 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function locateByDocumentId() {
+    const documentIdInput = document.getElementById('documentIdInput');
+    const documentId = documentIdInput.value.trim();
+    
+    if (!documentId) {
+        alert('请输入文档 ID');
+        return;
+    }
+    
+    locatedDocumentId = documentId;
+    locateMode = true;
+    loadChunks();
+}
+
+function clearLocate() {
+    const documentIdInput = document.getElementById('documentIdInput');
+    documentIdInput.value = '';
+    locatedDocumentId = null;
+    locateMode = false;
+    loadChunks();
+}
+
+async function loadRecommendations() {
+    const recommendationsList = document.getElementById('recommendationsList');
+    const recommendationsSection = document.getElementById('recommendationsSection');
+    
+    try {
+        const response = await fetchAPI('/chunks/recommend-merges', {
+            method: 'POST',
+            body: JSON.stringify({
+                similarity_threshold: 0.85,
+                max_recommendations: 10,
+            }),
+        });
+        
+        if (response.recommendations.length === 0) {
+            recommendationsList.innerHTML = `
+                <div class="recommendation-empty">
+                    <p>暂无推荐</p>
+                    <p class="text-secondary">当前没有发现适合合并的 Chunk</p>
+                </div>
+            `;
+        } else {
+            recommendationsList.innerHTML = response.recommendations.map((rec, index) => `
+                <div class="recommendation-card">
+                    <div class="recommendation-header">
+                        <span class="recommendation-index">#${index + 1}</span>
+                        <span class="recommendation-similarity">相似度: ${(rec.similarity * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="recommendation-content">
+                        <div class="recommendation-chunk">
+                            <span class="chunk-label">Chunk 1:</span>
+                            <span class="chunk-text">${escapeHtml(rec.chunk_1_content)}</span>
+                        </div>
+                        <div class="recommendation-chunk">
+                            <span class="chunk-label">Chunk 2:</span>
+                            <span class="chunk-text">${escapeHtml(rec.chunk_2_content)}</span>
+                        </div>
+                    </div>
+                    <div class="recommendation-actions">
+                        <button class="btn btn-small btn-primary" onclick="acceptRecommendation('${rec.chunk_id_1}', '${rec.chunk_id_2}')">接受推荐</button>
+                        <button class="btn btn-small btn-secondary" onclick="previewRecommendation('${rec.chunk_id_1}', '${rec.chunk_id_2}')">预览</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        recommendationsSection.classList.remove('hidden');
+    } catch (error) {
+        console.error('加载推荐失败:', error);
+        alert(`加载推荐失败: ${error.message}`);
+    }
+}
+
+function closeRecommendations() {
+    const recommendationsSection = document.getElementById('recommendationsSection');
+    recommendationsSection.classList.add('hidden');
+}
+
+async function acceptRecommendation(chunkId1, chunkId2) {
+    try {
+        const preview = await fetchAPI('/chunks/merge/preview', {
+            method: 'POST',
+            body: JSON.stringify({
+                chunk_id_1: chunkId1,
+                chunk_id_2: chunkId2,
+            }),
+        });
+
+        const confirmed = confirm(
+            `合并预览：\n\n` +
+            `Chunk 1 内容:\n${preview.chunk_1_content.substring(0, 100)}...\n\n` +
+            `Chunk 2 内容:\n${preview.chunk_2_content.substring(0, 100)}...\n\n` +
+            `合并后内容:\n${preview.merged_content.substring(0, 200)}...\n\n` +
+            `确定要合并这两个 Chunk 吗？`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        const response = await fetchAPI('/chunks/merge', {
+            method: 'POST',
+            body: JSON.stringify({
+                chunk_id_1: chunkId1,
+                chunk_id_2: chunkId2,
+            }),
+        });
+        
+        alert(`合并成功！\n\n新的 Chunk ID: ${response.chunk_id.substring(0, 8)}...`);
+        loadRecommendations();
+        loadChunks();
+    } catch (error) {
+        console.error('合并 Chunk 失败:', error);
+        alert(`合并失败: ${error.message}`);
+    }
+}
+
+async function previewRecommendation(chunkId1, chunkId2) {
+    try {
+        const preview = await fetchAPI('/chunks/merge/preview', {
+            method: 'POST',
+            body: JSON.stringify({
+                chunk_id_1: chunkId1,
+                chunk_id_2: chunkId2,
+            }),
+        });
+
+        alert(
+            `合并预览：\n\n` +
+            `Chunk 1 内容:\n${preview.chunk_1_content.substring(0, 150)}...\n\n` +
+            `Chunk 2 内容:\n${preview.chunk_2_content.substring(0, 150)}...\n\n` +
+            `合并后内容:\n${preview.merged_content.substring(0, 300)}...\n\n` +
+            `点击"接受推荐"按钮来执行合并操作。`
+        );
+    } catch (error) {
+        console.error('预览失败:', error);
+        alert(`预览失败: ${error.message}`);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const refreshButton = document.getElementById('refreshButton');
     const statusFilter = document.getElementById('statusFilter');
     const typeFilter = document.getElementById('typeFilter');
     const mergeButton = document.getElementById('mergeButton');
+    const locateButton = document.getElementById('locateButton');
+    const clearLocateButton = document.getElementById('clearLocateButton');
+    const recommendButton = document.getElementById('recommendButton');
+    const closeRecommendations = document.getElementById('closeRecommendations');
     
     refreshButton.addEventListener('click', loadChunks);
     statusFilter.addEventListener('change', loadChunks);
     typeFilter.addEventListener('change', loadChunks);
     mergeButton.addEventListener('click', mergeChunks);
+    locateButton.addEventListener('click', locateByDocumentId);
+    clearLocateButton.addEventListener('click', clearLocate);
+    recommendButton.addEventListener('click', loadRecommendations);
+    closeRecommendations.addEventListener('click', closeRecommendations);
     
     loadChunks();
 });
