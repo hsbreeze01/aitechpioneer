@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 
 class DocumentStatus(str, Enum):
@@ -43,7 +43,9 @@ class Document:
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
     @classmethod
-    def create(cls, file_name: str, file_type: FileType, file_path: str, content: str = "") -> "Document":
+    def create(
+        cls, file_name: str, file_type: FileType, file_path: str, content: str = ""
+    ) -> "Document":
         metadata = DocumentMetadata(
             title=file_name,
             word_count=len(content.split()) if content else 0,
@@ -113,6 +115,7 @@ class Chunk:
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     merged_from: Optional[List[Dict[str, Any]]] = None
+    derived_from: Optional[List[str]] = None
 
     @classmethod
     def create(
@@ -158,3 +161,42 @@ class Chunk:
         self.updated_at = datetime.utcnow()
         if self.metadata:
             self.metadata.word_count = len(content.split()) if content else 0
+
+
+@dataclass
+class RetrievedChunk:
+    chunk_id: UUID
+    document_id: str
+    content: str
+    score: float
+    chunk_index: int
+    start_char: int
+    end_char: int
+
+
+@dataclass
+class QARetrievalRecord:
+    record_id: UUID = field(default_factory=uuid4)
+    question: str = ""
+    answer: str = ""
+    retrieved_chunks: List[RetrievedChunk] = field(default_factory=list)
+    model: str = ""
+    usage: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+    @classmethod
+    def create(
+        cls,
+        question: str,
+        answer: str,
+        retrieved_chunks: List[RetrievedChunk],
+        model: str = "",
+        usage: Optional[Dict[str, Any]] = None,
+    ) -> "QARetrievalRecord":
+        return cls(
+            question=question,
+            answer=answer,
+            retrieved_chunks=retrieved_chunks,
+            model=model,
+            usage=usage or {},
+        )

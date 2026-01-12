@@ -31,3 +31,4 @@ test_rag.py
 repomix-output.xml
 analyze_chunks_simple.py
 analyze_chunks.py
+data/

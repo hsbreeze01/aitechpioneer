@@ -6,7 +6,6 @@ import httpx
 from aitechpioneer.domain.ports import LLMServicePort
 from aitechpioneer.settings import settings
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -151,7 +150,7 @@ class DeepSeekLLMService(LLMServicePort):
                     content = message.get("content", "")
 
                     usage = result.get("usage", {})
-                    
+
                     cleaned_usage = {
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),

@@ -1,6 +1,8 @@
-from typing import List
-import httpx
 import logging
+from typing import List
+
+import httpx
+
 from ..domain.ports import EmbeddingServicePort
 from ..settings import settings
 
@@ -29,9 +31,9 @@ class SiliconFlowEmbeddingService(EmbeddingServicePort):
 
         all_embeddings = []
         batch_size = 32
-        
+
         for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+            batch = texts[i : i + batch_size]
             payload = {
                 "model": self._model,
                 "input": batch,
@@ -45,7 +47,10 @@ class SiliconFlowEmbeddingService(EmbeddingServicePort):
 
                     batch_embeddings = [item["embedding"] for item in result["data"]]
                     all_embeddings.extend(batch_embeddings)
-                    logger.info(f"Successfully generated {len(batch_embeddings)} embeddings (batch {i//batch_size + 1})")
+                    logger.info(
+                        f"Successfully generated {len(batch_embeddings)} "
+                        f"embeddings (batch {i // batch_size + 1})"
+                    )
 
             except httpx.HTTPStatusError as e:
                 logger.error(f"HTTP error occurred: {e.response.status_code} - {e.response.text}")

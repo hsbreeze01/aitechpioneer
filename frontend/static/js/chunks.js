@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8001/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 let selectedChunks = new Set();
 let allChunks = [];
 let locateMode = false;
@@ -193,6 +193,16 @@ async function loadChunks() {
                 ? `<button class="btn btn-small btn-undo" onclick="undoMerge('${chunk.chunk_id}')" title="撤销合并">↩ 撤销合并</button>`
                 : '';
             
+            const mergeForwardButton = adjacent.next && adjacent.next.document_id === chunk.document_id
+                ? `<button class="btn btn-small btn-merge-forward" onclick="mergeForward('${chunk.chunk_id}')" title="向前合并（与后一个Chunk）">→ 向前合并</button>`
+                : '';
+            
+            const mergeBackwardButton = adjacent.prev && adjacent.prev.document_id === chunk.document_id
+                ? `<button class="btn btn-small btn-merge-backward" onclick="mergeBackward('${chunk.chunk_id}')" title="向后合并（与前一个Chunk）">← 向后合并</button>`
+                : '';
+            
+            const semanticResegmentButton = `<button class="btn btn-small btn-semantic" onclick="semanticResegment('${chunk.document_id}')" title="语义重切分整个文档">🔄 语义重切分</button>`;
+            
             return `
             <div class="chunk-card" data-chunk-id="${chunk.chunk_id}">
                 <div class="chunk-header">
@@ -204,6 +214,9 @@ async function loadChunks() {
                     </div>
                     <div class="chunk-actions">
                         ${mergeButtons}
+                        ${mergeForwardButton}
+                        ${mergeBackwardButton}
+                        ${semanticResegmentButton}
                         ${undoMergeButton}
                         <select class="status-select" data-chunk-id="${chunk.chunk_id}">
                             <option value="active" ${chunk.status === 'active' ? 'selected' : ''}>活跃</option>
@@ -233,6 +246,12 @@ async function loadChunks() {
                         <span>📍</span>
                         <span>位置: ${chunk.start_index} - ${chunk.end_index}</span>
                     </div>
+                    ${chunk.derived_from && chunk.derived_from.length > 0 ? `
+                    <div class="meta-item">
+                        <span>🔗</span>
+                        <span>衍生自: ${chunk.derived_from.map(id => id.substring(0, 8)).join(', ')}...</span>
+                    </div>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -303,6 +322,75 @@ async function undoMerge(chunkId) {
     } catch (error) {
         console.error('撤销合并失败:', error);
         alert(`撤销失败: ${error.message}`);
+    }
+}
+
+async function mergeForward(chunkId) {
+    if (!confirm('确定要将此 Chunk 与后一个 Chunk 合并吗？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetchAPI(`/chunks/${chunkId}/merge-forward`, {
+            method: 'POST',
+        });
+        
+        alert(`向前合并成功！\n\n新的 Chunk ID: ${response.chunk_id.substring(0, 8)}...\n合并的 Chunk ID: ${response.merged_with.substring(0, 8)}...`);
+        selectedChunks.clear();
+        updateMergeButtonState();
+        loadChunks();
+    } catch (error) {
+        console.error('向前合并失败:', error);
+        alert(`向前合并失败: ${error.message}`);
+    }
+}
+
+async function mergeBackward(chunkId) {
+    if (!confirm('确定要将此 Chunk 与前一个 Chunk 合并吗？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetchAPI(`/chunks/${chunkId}/merge-backward`, {
+            method: 'POST',
+        });
+        
+        alert(`向后合并成功！\n\n新的 Chunk ID: ${response.chunk_id.substring(0, 8)}...\n合并的 Chunk ID: ${response.merged_with.substring(0, 8)}...`);
+        selectedChunks.clear();
+        updateMergeButtonState();
+        loadChunks();
+    } catch (error) {
+        console.error('向后合并失败:', error);
+        alert(`向后合并失败: ${error.message}`);
+    }
+}
+
+async function semanticResegment(documentId) {
+    const maxChunkSize = prompt('请输入最大 Chunk 大小（默认 1000）：', '1000');
+    const minChunkSize = prompt('请输入最小 Chunk 大小（默认 200）：', '200');
+    
+    if (maxChunkSize === null || minChunkSize === null) {
+        return;
+    }
+    
+    if (!confirm(`确定要对文档进行语义重切分吗？\n\n文档 ID: ${documentId.substring(0, 8)}...\n最大 Chunk 大小: ${maxChunkSize}\n最小 Chunk 大小: ${minChunkSize}\n\n此操作将创建新的 Chunk 并停用旧的 Chunk。`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetchAPI(`/documents/${documentId}/semantic-resegment`, {
+            method: 'POST',
+            body: JSON.stringify({
+                max_chunk_size: parseInt(maxChunkSize),
+                min_chunk_size: parseInt(minChunkSize),
+            }),
+        });
+        
+        alert(`语义重切分成功！\n\n文档 ID: ${response.document_id.substring(0, 8)}...\n创建的 Chunk 数量: ${response.chunks_created}\n停用的 Chunk 数量: ${response.chunks_deactivated}`);
+        loadChunks();
+    } catch (error) {
+        console.error('语义重切分失败:', error);
+        alert(`语义重切分失败: ${error.message}`);
     }
 }
 

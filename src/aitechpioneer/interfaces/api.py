@@ -1,22 +1,24 @@
-from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+import logging
+import os
+from typing import Any, Dict, List, Optional
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-import logging
-import os
 
-from aitechpioneer.domain.models import FileType, ChunkStatus
 from aitechpioneer.application.use_cases import (
-    DocumentUploadUseCase,
     ChunkManagerUseCase,
+    DocumentUploadUseCase,
+    QARetrievalUseCase,
     RAGUseCase,
+    create_embedding_service,
 )
-from aitechpioneer.infrastructure.document_parser import DocumentParser
+from aitechpioneer.domain.models import ChunkStatus, FileType
 from aitechpioneer.infrastructure.chunking import ParentChildChunker
 from aitechpioneer.infrastructure.db import QdrantDatabase
 from aitechpioneer.infrastructure.deepseek_llm import DeepSeekLLMService
-from aitechpioneer.application.use_cases import create_embedding_service
+from aitechpioneer.infrastructure.document_parser import DocumentParser
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +36,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "frontend")
+frontend_dir = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "frontend",
+)
 if os.path.exists(frontend_dir):
-    app.mount("/static", StaticFiles(directory=os.path.join(frontend_dir, "static")), name="static")
+    app.mount(
+        "/static",
+        StaticFiles(directory=os.path.join(frontend_dir, "static")),
+        name="static",
+    )
 
 
 @app.get("/api", include_in_schema=False)
-async def api_redirect():
+async def api_redirect() -> dict[str, Any]:
     return {"message": "API endpoints are available at /api/*"}
 
 
@@ -74,6 +83,8 @@ class ChunkInfo(BaseModel):
     version: int
     start_index: int
     end_index: int
+    derived_from: Optional[List[str]] = None
+    merged_from: Optional[List[Dict[str, Any]]] = None
 
 
 class ChunkListResponse(BaseModel):
@@ -125,8 +136,15 @@ class ChunkUndoMergeResponse(BaseModel):
 
 
 class ChunkRecommendMergeRequest(BaseModel):
-    similarity_threshold: Optional[float] = Field(0.85, description="Minimum similarity threshold for recommendations", ge=0.0, le=1.0)
-    max_recommendations: Optional[int] = Field(10, description="Maximum number of recommendations", ge=1, le=50)
+    similarity_threshold: Optional[float] = Field(
+        0.85,
+        description="Minimum similarity threshold for recommendations",
+        ge=0.0,
+        le=1.0,
+    )
+    max_recommendations: Optional[int] = Field(
+        10, description="Maximum number of recommendations", ge=1, le=50
+    )
 
 
 class ChunkRecommendMergeResponse(BaseModel):
@@ -139,12 +157,63 @@ class ChunkDeleteResponse(BaseModel):
     message: str
 
 
+class ChunkMergeForwardResponse(BaseModel):
+    chunk_id: str
+    message: str
+    merged_with: str
+
+
+class ChunkMergeBackwardResponse(BaseModel):
+    chunk_id: str
+    message: str
+    merged_with: str
+
+
+class SemanticResegmentRequest(BaseModel):
+    max_chunk_size: Optional[int] = Field(1000, description="Maximum chunk size", ge=200, le=5000)
+    min_chunk_size: Optional[int] = Field(200, description="Minimum chunk size", ge=50, le=1000)
+
+
+class SemanticResegmentResponse(BaseModel):
+    document_id: str
+    message: str
+    chunks_created: int
+    chunks_deactivated: int
+
+
+class QARetrievalRecordInfo(BaseModel):
+    record_id: str
+    question: str
+    answer: str
+    retrieved_chunks: List[Dict[str, Any]]
+    model: str
+    created_at: str
+
+
+class QARetrievalListResponse(BaseModel):
+    records: List[QARetrievalRecordInfo]
+    total: int
+
+
+class QARetrievalStatisticsResponse(BaseModel):
+    total_records: int
+    total_questions: int
+    total_chunks_retrieved: int
+    avg_chunks_per_question: float
+    oldest_record: Optional[str]
+    newest_record: Optional[str]
+
+
 class QuestionRequest(BaseModel):
     question: str = Field(..., description="Question to answer")
     collection_name: Optional[str] = Field("documents", description="Collection name to search")
     limit: Optional[int] = Field(5, description="Number of chunks to retrieve", ge=1, le=20)
-    score_threshold: Optional[float] = Field(0.5, description="Minimum similarity score", ge=0.0, le=1.0)
-    conversation_history: Optional[List[Dict]] = Field(None, description="Conversation history for context")
+    score_threshold: Optional[float] = Field(
+        0.5, description="Minimum similarity score", ge=0.0, le=1.0
+    )
+    conversation_history: Optional[List[Dict]] = Field(
+        None, description="Conversation history for context"
+    )
 
 
 class QuestionResponse(BaseModel):
@@ -159,7 +228,12 @@ class ErrorResponse(BaseModel):
     detail: str
 
 
-def get_use_cases():
+def get_use_cases() -> tuple[
+    DocumentUploadUseCase,
+    ChunkManagerUseCase,
+    RAGUseCase,
+    QARetrievalUseCase,
+]:
     document_parser = DocumentParser()
     chunker = ParentChildChunker()
     embedding_service = create_embedding_service()
@@ -184,11 +258,13 @@ def get_use_cases():
         llm_service=llm_service,
     )
 
-    return document_upload_use_case, chunk_manager_use_case, rag_use_case
+    qa_retrieval_use_case = QARetrievalUseCase()
+
+    return document_upload_use_case, chunk_manager_use_case, rag_use_case, qa_retrieval_use_case
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, Any]:
     return {
         "message": "RAG System API",
         "version": "1.0.0",
@@ -201,7 +277,7 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, str]:
     return {"status": "healthy"}
 
 
@@ -210,12 +286,12 @@ async def health_check():
     response_model=DocumentListResponse,
     responses={500: {"model": ErrorResponse}},
 )
-async def get_documents(collection_name: str = "documents"):
+async def get_documents(collection_name: str = "documents") -> DocumentListResponse:
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
-        
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
         documents = await chunk_manager_use_case.vector_database.get_all_documents(collection_name)
-        
+
         document_infos = [
             DocumentInfo(
                 document_id=doc["document_id"],
@@ -225,7 +301,7 @@ async def get_documents(collection_name: str = "documents"):
             )
             for doc in documents
         ]
-        
+
         return DocumentListResponse(
             documents=document_infos,
             total=len(document_infos),
@@ -254,10 +330,10 @@ async def upload_document(
 
         file_type_enum = FileType(file_type)
 
-        document_upload_use_case, _, _ = get_use_cases()
+        document_upload_use_case, _, _, _ = get_use_cases()
 
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}") as temp_file:
             content = await file.read()
@@ -297,7 +373,7 @@ async def upload_document(
 )
 async def get_all_chunks(collection_name: str = "documents"):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         chunks = await chunk_manager_use_case.vector_database.get_all_chunks(collection_name)
 
@@ -312,6 +388,8 @@ async def get_all_chunks(collection_name: str = "documents"):
                 version=chunk.version,
                 start_index=chunk.start_char,
                 end_index=chunk.end_char,
+                derived_from=chunk.derived_from,
+                merged_from=chunk.merged_from,
             )
             for chunk in chunks
         ]
@@ -334,7 +412,7 @@ async def get_all_chunks(collection_name: str = "documents"):
 )
 async def get_document_chunks(document_id: str, collection_name: str = "documents"):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         chunks = await chunk_manager_use_case.vector_database.get_chunks_by_document(
             collection_name, document_id
@@ -351,6 +429,8 @@ async def get_document_chunks(document_id: str, collection_name: str = "document
                 version=chunk.version,
                 start_index=chunk.start_char,
                 end_index=chunk.end_char,
+                derived_from=chunk.derived_from,
+                merged_from=chunk.merged_from,
             )
             for chunk in chunks
         ]
@@ -369,7 +449,11 @@ async def get_document_chunks(document_id: str, collection_name: str = "document
 @app.put(
     "/api/chunks/{chunk_id}/status",
     response_model=ChunkStatusUpdateResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
 )
 async def update_chunk_status(
     chunk_id: str,
@@ -385,7 +469,7 @@ async def update_chunk_status(
 
         status_enum = ChunkStatus(request.status)
 
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         chunk = await chunk_manager_use_case.update_chunk_status(
             chunk_id=chunk_id,
@@ -409,20 +493,24 @@ async def update_chunk_status(
 @app.post(
     "/api/chunks/merge/preview",
     response_model=ChunkMergePreviewResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
 )
 async def preview_merge_chunks(
     request: ChunkMergePreviewRequest,
     collection_name: str = "documents",
 ):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         chunk_1 = await chunk_manager_use_case.get_chunk(
             chunk_id=request.chunk_id_1,
             collection_name=collection_name,
         )
-        
+
         chunk_2 = await chunk_manager_use_case.get_chunk(
             chunk_id=request.chunk_id_2,
             collection_name=collection_name,
@@ -448,14 +536,18 @@ async def preview_merge_chunks(
 @app.post(
     "/api/chunks/merge",
     response_model=ChunkMergeResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
 )
 async def merge_chunks(
     request: ChunkMergeRequest,
     collection_name: str = "documents",
 ):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         merged_chunk = await chunk_manager_use_case.merge_chunks(
             chunk_id_1=request.chunk_id_1,
@@ -478,14 +570,18 @@ async def merge_chunks(
 @app.post(
     "/api/chunks/merge/undo",
     response_model=ChunkUndoMergeResponse,
-    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
 )
 async def undo_merge_chunks(
     request: ChunkUndoMergeRequest,
     collection_name: str = "documents",
 ):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         restored_chunks = await chunk_manager_use_case.undo_merge(
             merged_chunk_id=request.merged_chunk_id,
@@ -514,7 +610,7 @@ async def recommend_merges(
     collection_name: str = "documents",
 ):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         recommendations = await chunk_manager_use_case.recommend_merges(
             collection_name=collection_name,
@@ -544,7 +640,7 @@ async def delete_chunk(
     collection_name: str = "documents",
 ):
     try:
-        _, chunk_manager_use_case, _ = get_use_cases()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
 
         await chunk_manager_use_case.delete_chunk(
             chunk_id=chunk_id,
@@ -568,7 +664,7 @@ async def delete_chunk(
 )
 async def answer_question(request: QuestionRequest):
     try:
-        _, _, rag_use_case = get_use_cases()
+        _, _, rag_use_case, qa_retrieval_use_case = get_use_cases()
 
         response = await rag_use_case.answer_question(
             question=request.question,
@@ -590,7 +686,297 @@ async def answer_question(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "frontend")
+@app.post(
+    "/api/chunks/{chunk_id}/merge-forward",
+    response_model=ChunkMergeForwardResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def merge_chunk_forward(
+    chunk_id: str,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        merged_chunk = await chunk_manager_use_case.merge_forward(
+            chunk_id=chunk_id,
+            collection_name=collection_name,
+        )
+
+        return ChunkMergeForwardResponse(
+            chunk_id=str(merged_chunk.chunk_id),
+            message="Chunk merged forward successfully",
+            merged_with=str(merged_chunk.derived_from[-1]) if merged_chunk.derived_from else "",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error merging chunk forward: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/api/chunks/{chunk_id}/merge-backward",
+    response_model=ChunkMergeBackwardResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def merge_chunk_backward(
+    chunk_id: str,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        merged_chunk = await chunk_manager_use_case.merge_backward(
+            chunk_id=chunk_id,
+            collection_name=collection_name,
+        )
+
+        return ChunkMergeBackwardResponse(
+            chunk_id=str(merged_chunk.chunk_id),
+            message="Chunk merged backward successfully",
+            merged_with=str(merged_chunk.derived_from[-1]) if merged_chunk.derived_from else "",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error merging chunk backward: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/api/documents/{document_id}/semantic-resegment",
+    response_model=SemanticResegmentResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
+async def semantic_resegment_document(
+    document_id: str,
+    request: SemanticResegmentRequest,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        chunks = await chunk_manager_use_case.semantic_resegment(
+            document_id=document_id,
+            collection_name=collection_name,
+            max_chunk_size=request.max_chunk_size or 1000,
+            min_chunk_size=request.min_chunk_size or 200,
+        )
+
+        active_chunks = [c for c in chunks if c.status == ChunkStatus.ACTIVE]
+        deactivated_chunks = [c for c in chunks if c.status == ChunkStatus.INACTIVE]
+
+        return SemanticResegmentResponse(
+            document_id=document_id,
+            message="Document resegmented successfully",
+            chunks_created=len(active_chunks),
+            chunks_deactivated=len(deactivated_chunks),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resegmenting document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/qa/records",
+    response_model=QARetrievalListResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+async def get_qa_records():
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        records = await qa_retrieval_use_case.get_all_records()
+
+        record_infos = [
+            QARetrievalRecordInfo(
+                record_id=str(record.record_id),
+                question=record.question,
+                answer=record.answer,
+                retrieved_chunks=[
+                    {
+                        "chunk_id": str(chunk.chunk_id),
+                        "document_id": chunk.document_id,
+                        "content": chunk.content,
+                        "score": chunk.score,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                    }
+                    for chunk in record.retrieved_chunks
+                ],
+                model=record.model,
+                created_at=record.created_at.isoformat(),
+            )
+            for record in records
+        ]
+
+        return QARetrievalListResponse(
+            records=record_infos,
+            total=len(record_infos),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting QA records: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/qa/records/chunk/{chunk_id}",
+    response_model=QARetrievalListResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_qa_records_by_chunk(chunk_id: str):
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        records = await qa_retrieval_use_case.get_records_by_chunk(chunk_id)
+
+        record_infos = [
+            QARetrievalRecordInfo(
+                record_id=str(record.record_id),
+                question=record.question,
+                answer=record.answer,
+                retrieved_chunks=[
+                    {
+                        "chunk_id": str(chunk.chunk_id),
+                        "document_id": chunk.document_id,
+                        "content": chunk.content,
+                        "score": chunk.score,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                    }
+                    for chunk in record.retrieved_chunks
+                ],
+                model=record.model,
+                created_at=record.created_at.isoformat(),
+            )
+            for record in records
+        ]
+
+        return QARetrievalListResponse(
+            records=record_infos,
+            total=len(record_infos),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting QA records for chunk: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/qa/records/document/{document_id}",
+    response_model=QARetrievalListResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_qa_records_by_document(document_id: str):
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        records = await qa_retrieval_use_case.get_records_by_document(document_id)
+
+        record_infos = [
+            QARetrievalRecordInfo(
+                record_id=str(record.record_id),
+                question=record.question,
+                answer=record.answer,
+                retrieved_chunks=[
+                    {
+                        "chunk_id": str(chunk.chunk_id),
+                        "document_id": chunk.document_id,
+                        "content": chunk.content,
+                        "score": chunk.score,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                    }
+                    for chunk in record.retrieved_chunks
+                ],
+                model=record.model,
+                created_at=record.created_at.isoformat(),
+            )
+            for record in records
+        ]
+
+        return QARetrievalListResponse(
+            records=record_infos,
+            total=len(record_infos),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting QA records for document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/qa/statistics",
+    response_model=QARetrievalStatisticsResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+async def get_qa_statistics():
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        stats = await qa_retrieval_use_case.get_statistics()
+
+        return QARetrievalStatisticsResponse(
+            total_records=stats.get("total_records", 0),
+            total_questions=stats.get("total_questions", 0),
+            total_chunks_retrieved=stats.get("total_chunks_retrieved", 0),
+            avg_chunks_per_question=stats.get("avg_chunks_per_question", 0.0),
+            oldest_record=stats.get("oldest_record"),
+            newest_record=stats.get("newest_record"),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting QA statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete(
+    "/api/qa/records/cleanup",
+    responses={500: {"model": ErrorResponse}},
+)
+async def cleanup_old_qa_records(days: int = 7):
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        deleted_count = await qa_retrieval_use_case.delete_old_records(days=days)
+
+        return {
+            "message": f"Deleted {deleted_count} old QA records",
+            "deleted_count": deleted_count,
+            "days": days,
+        }
+
+    except Exception as e:
+        logger.error(f"Error cleaning up QA records: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+frontend_dir = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+    "frontend",
+)
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 

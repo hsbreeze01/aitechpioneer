@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from aitechpioneer.domain.models import Chunk, ChunkStatus
@@ -38,9 +38,7 @@ class VectorDatabasePort(ABC):
         pass
 
     @abstractmethod
-    async def get_chunks_by_document(
-        self, collection_name: str, document_id: str
-    ) -> List[Chunk]:
+    async def get_chunks_by_document(self, collection_name: str, document_id: str) -> List[Chunk]:
         pass
 
     @abstractmethod

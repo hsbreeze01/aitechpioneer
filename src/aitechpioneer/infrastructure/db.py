@@ -1,22 +1,30 @@
-import os
-from uuid import UUID
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from typing import List, Dict, Any, Optional, Tuple
 import logging
+import os
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+from uuid import UUID
 
-from ..settings import settings
-from ..domain.models import Chunk, ChunkStatus, ChunkQuality, ChunkType, ChunkMetadata, FileType
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
+
+from ..domain.models import Chunk, ChunkMetadata, ChunkQuality, ChunkStatus, ChunkType, FileType
 from ..domain.ports import VectorDatabasePort
+from ..settings import settings
 
 logger = logging.getLogger(__name__)
 
 
 class QdrantDatabase(VectorDatabasePort):
     def __init__(self):
-        os.environ['NO_PROXY'] = 'localhost,127.0.0.1'
-        os.environ['no_proxy'] = 'localhost,127.0.0.1'
+        os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+        os.environ["no_proxy"] = "localhost,127.0.0.1"
         self.client = QdrantClient(
             host=settings.qdrant_host,
             port=settings.qdrant_port,
@@ -60,14 +68,20 @@ class QdrantDatabase(VectorDatabasePort):
             "end_char": chunk.end_char,
             "created_at": chunk.created_at.isoformat(),
             "updated_at": chunk.updated_at.isoformat(),
-            "metadata": {
-                "source_file": chunk.metadata.source_file if chunk.metadata else "",
-                "file_type": chunk.metadata.file_type.value if chunk.metadata else "",
-                "page_number": chunk.metadata.page_number if chunk.metadata else None,
-                "section_title": chunk.metadata.section_title if chunk.metadata else None,
-                "word_count": chunk.metadata.word_count if chunk.metadata else 0,
-                "token_count": chunk.metadata.token_count if chunk.metadata else 0,
-            } if chunk.metadata else {},
+            "merged_from": chunk.merged_from,
+            "derived_from": chunk.derived_from,
+            "metadata": (
+                {
+                    "source_file": chunk.metadata.source_file if chunk.metadata else "",
+                    "file_type": chunk.metadata.file_type.value if chunk.metadata else "",
+                    "page_number": chunk.metadata.page_number if chunk.metadata else None,
+                    "section_title": chunk.metadata.section_title if chunk.metadata else None,
+                    "word_count": chunk.metadata.word_count if chunk.metadata else 0,
+                    "token_count": chunk.metadata.token_count if chunk.metadata else 0,
+                }
+                if chunk.metadata
+                else {}
+            ),
         }
 
     def _payload_to_chunk(self, payload: Dict[str, Any], point_id: UUID) -> Chunk:
@@ -82,10 +96,10 @@ class QdrantDatabase(VectorDatabasePort):
                 word_count=metadata_dict.get("word_count", 0),
                 token_count=metadata_dict.get("token_count", 0),
             )
-        
+
         chunk_id_str = payload.get("chunk_id", str(point_id))
         chunk_id = UUID(chunk_id_str) if isinstance(chunk_id_str, str) else chunk_id_str
-        
+
         return Chunk(
             chunk_id=chunk_id,
             document_id=payload.get("document_id", ""),
@@ -99,9 +113,15 @@ class QdrantDatabase(VectorDatabasePort):
             chunk_index=payload.get("chunk_index", 0),
             start_char=payload.get("start_char", 0),
             end_char=payload.get("end_char", 0),
-            created_at=datetime.fromisoformat(payload.get("created_at", datetime.utcnow().isoformat())),
-            updated_at=datetime.fromisoformat(payload.get("updated_at", datetime.utcnow().isoformat())),
+            created_at=datetime.fromisoformat(
+                payload.get("created_at", datetime.utcnow().isoformat())
+            ),
+            updated_at=datetime.fromisoformat(
+                payload.get("updated_at", datetime.utcnow().isoformat())
+            ),
             metadata=metadata,
+            merged_from=payload.get("merged_from"),
+            derived_from=payload.get("derived_from"),
         )
 
     async def insert_chunks(self, collection_name: str, chunks: List[Chunk]) -> None:
@@ -114,7 +134,7 @@ class QdrantDatabase(VectorDatabasePort):
                     payload=self._chunk_to_payload(chunk),
                 )
                 points.append(point)
-            
+
             self.client.upsert(
                 collection_name=collection_name,
                 points=points,
@@ -143,7 +163,7 @@ class QdrantDatabase(VectorDatabasePort):
                         )
                     ]
                 )
-            
+
             search_result = self.client.query_points(
                 collection_name=collection_name,
                 query=query_vector,
@@ -151,7 +171,7 @@ class QdrantDatabase(VectorDatabasePort):
                 score_threshold=score_threshold,
                 query_filter=search_filter,
             )
-            
+
             results = []
             for hit in search_result.points:
                 if hit.payload is None:
@@ -159,7 +179,7 @@ class QdrantDatabase(VectorDatabasePort):
                     continue
                 chunk = self._payload_to_chunk(hit.payload, UUID(str(hit.id)))
                 results.append((chunk, hit.score))
-            
+
             return results
         except Exception as e:
             logger.error(f"Failed to search in '{collection_name}': {e}")
@@ -193,9 +213,7 @@ class QdrantDatabase(VectorDatabasePort):
             logger.error(f"Failed to delete chunk '{chunk_id}' from '{collection_name}': {e}")
             raise
 
-    async def get_chunks_by_document(
-        self, collection_name: str, document_id: str
-    ) -> List[Chunk]:
+    async def get_chunks_by_document(self, collection_name: str, document_id: str) -> List[Chunk]:
         try:
             search_filter = Filter(
                 must=[
@@ -205,19 +223,19 @@ class QdrantDatabase(VectorDatabasePort):
                     )
                 ]
             )
-            
+
             result = self.client.scroll(
                 collection_name=collection_name,
                 scroll_filter=search_filter,
                 limit=1000,
             )
-            
+
             chunks = []
             for point in result[0]:
                 if point.payload:
                     chunk = self._payload_to_chunk(point.payload, UUID(str(point.id)))
                     chunks.append(chunk)
-            
+
             return chunks
         except Exception as e:
             logger.error(f"Failed to get chunks for document '{document_id}': {e}")
@@ -229,11 +247,11 @@ class QdrantDatabase(VectorDatabasePort):
                 collection_name=collection_name,
                 ids=[chunk_id],
             )
-            
+
             if result and result[0].payload:
                 chunk = self._payload_to_chunk(result[0].payload, UUID(str(result[0].id)))
                 return chunk
-            
+
             return None
         except Exception as e:
             logger.error(f"Failed to get chunk '{chunk_id}': {e}")
@@ -245,7 +263,7 @@ class QdrantDatabase(VectorDatabasePort):
                 collection_name=collection_name,
                 limit=10000,
             )
-            
+
             documents = {}
             for point in result[0]:
                 if not point.payload:
@@ -258,7 +276,7 @@ class QdrantDatabase(VectorDatabasePort):
                         "file_type": point.payload.get("metadata", {}).get("file_type", ""),
                         "uploaded_at": point.payload.get("created_at", ""),
                     }
-            
+
             return list(documents.values())
         except Exception as e:
             logger.error(f"Failed to get documents from '{collection_name}': {e}")
@@ -270,16 +288,16 @@ class QdrantDatabase(VectorDatabasePort):
                 collection_name=collection_name,
                 limit=10000,
             )
-            
+
             chunks = []
             for point in result[0]:
                 if not point.payload:
                     continue
                 chunk = self._payload_to_chunk(point.payload, UUID(str(point.id)))
                 chunks.append(chunk)
-            
+
             chunks.sort(key=lambda x: (x.document_id, x.chunk_index, x.start_char))
-            
+
             return chunks
         except Exception as e:
             logger.error(f"Failed to get chunks from '{collection_name}': {e}")

@@ -641,6 +641,63 @@ body {
     background: #dc2626;
 }
 
+.btn-merge-forward {
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-merge-forward:hover {
+    background: #7c3aed;
+}
+
+.btn-merge-backward {
+    background: #06b6d4;
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-merge-backward:hover {
+    background: #0891b2;
+}
+
+.btn-semantic {
+    background: #ec4899;
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-semantic:hover {
+    background: #db2777;
+}
+
 .quick-locate {
     display: flex;
     gap: 0.5rem;
@@ -1310,6 +1367,183 @@ body {
     background: #fee2e2;
     border-radius: var(--radius-md);
     border: 1px solid #fecaca;
+}
+
+.qa-records-section {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 2rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    margin-top: 2rem;
+}
+
+.qa-records-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.qa-records-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.qa-records-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.qa-records-stats {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+}
+
+.stats-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stats-summary span {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.qa-records-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.qa-record-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.qa-record-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+.qa-record-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.qa-record-question {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.question-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.question-text {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.qa-record-time {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.qa-record-answer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.answer-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.answer-text {
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+}
+
+.qa-record-chunks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chunks-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.qa-record-chunks .chunks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.qa-record-chunk {
+    background: var(--bg-tertiary);
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.qa-record-chunk.highlighted {
+    background: #fef3c7;
+    border-color: #f59e0b;
+}
+
+.qa-record-chunk .chunk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.qa-record-chunk .chunk-id {
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.qa-record-chunk .chunk-score {
+    font-size: 0.75rem;
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+.qa-record-chunk .chunk-content {
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.empty-qa-records {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-tertiary);
 }
 
 @media (max-width: 768px) {

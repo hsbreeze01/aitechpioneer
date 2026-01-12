@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8001/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 async function fetchAPI(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -140,13 +140,203 @@ async function loadHistory() {
     }
 }
 
+async function loadQaRecords() {
+    const filter = document.getElementById('qaRecordsFilter').value;
+    const qaRecordsList = document.getElementById('qaRecordsList');
+    const qaRecordsStats = document.getElementById('qaRecordsStats');
+    
+    try {
+        let endpoint = '/qa/records';
+        if (filter === 'today') {
+            endpoint = '/qa/stats/today';
+        } else if (filter === 'week') {
+            endpoint = '/qa/stats/week';
+        }
+        
+        const response = await fetchAPI(endpoint);
+        
+        if (filter === 'all') {
+            if (response.records.length === 0) {
+                qaRecordsList.innerHTML = '<div class="empty-qa-records">暂无QA检索记录</div>';
+                qaRecordsStats.innerHTML = '';
+                return;
+            }
+            
+            qaRecordsList.innerHTML = response.records.map(record => `
+                <div class="qa-record-card">
+                    <div class="qa-record-header">
+                        <div class="qa-record-question">
+                            <span class="question-label">问题:</span>
+                            <span class="question-text">${escapeHtml(record.question)}</span>
+                        </div>
+                        <span class="qa-record-time">${formatDate(record.created_at)}</span>
+                    </div>
+                    <div class="qa-record-answer">
+                        <span class="answer-label">答案:</span>
+                        <span class="answer-text">${escapeHtml(record.answer)}</span>
+                    </div>
+                    <div class="qa-record-chunks">
+                        <span class="chunks-label">检索到的Chunk (${record.retrieved_chunks.length}):</span>
+                        <div class="chunks-list">
+                            ${record.retrieved_chunks.map(chunk => `
+                                <div class="qa-record-chunk">
+                                    <div class="chunk-header">
+                                        <span class="chunk-id">${escapeHtml(chunk.chunk_id.substring(0, 8))}...</span>
+                                        <span class="chunk-score">相似度: ${(chunk.score * 100).toFixed(1)}%</span>
+                                    </div>
+                                    <div class="chunk-content">${escapeHtml(chunk.content.substring(0, 100))}...</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            qaRecordsStats.innerHTML = `
+                <div class="stats-summary">
+                    <span>总记录数: ${response.records.length}</span>
+                </div>
+            `;
+        } else {
+            qaRecordsStats.innerHTML = `
+                <div class="stats-summary">
+                    <span>总记录数: ${response.total_records}</span>
+                    <span>总问题数: ${response.total_questions}</span>
+                    <span>总Chunk检索数: ${response.total_retrievals}</span>
+                </div>
+            `;
+            
+            qaRecordsList.innerHTML = '<div class="empty-qa-records">选择"全部记录"查看详细记录</div>';
+        }
+        
+    } catch (error) {
+        console.error('加载QA检索记录失败:', error);
+        qaRecordsList.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+        qaRecordsStats.innerHTML = '';
+    }
+}
+
+async function loadQaRecordsByChunk(chunkId) {
+    const qaRecordsList = document.getElementById('qaRecordsList');
+    const qaRecordsStats = document.getElementById('qaRecordsStats');
+    
+    try {
+        const response = await fetchAPI(`/qa/records/chunk/${chunkId}`);
+        
+        if (response.records.length === 0) {
+            qaRecordsList.innerHTML = '<div class="empty-qa-records">该Chunk未被检索过</div>';
+            qaRecordsStats.innerHTML = '';
+            return;
+        }
+        
+        qaRecordsList.innerHTML = response.records.map(record => `
+            <div class="qa-record-card">
+                <div class="qa-record-header">
+                    <div class="qa-record-question">
+                        <span class="question-label">问题:</span>
+                        <span class="question-text">${escapeHtml(record.question)}</span>
+                    </div>
+                    <span class="qa-record-time">${formatDate(record.created_at)}</span>
+                </div>
+                <div class="qa-record-answer">
+                    <span class="answer-label">答案:</span>
+                    <span class="answer-text">${escapeHtml(record.answer)}</span>
+                </div>
+                <div class="qa-record-chunks">
+                    <span class="chunks-label">检索到的Chunk (${record.retrieved_chunks.length}):</span>
+                    <div class="chunks-list">
+                        ${record.retrieved_chunks.map(chunk => `
+                            <div class="qa-record-chunk ${chunk.chunk_id === chunkId ? 'highlighted' : ''}">
+                                <div class="chunk-header">
+                                    <span class="chunk-id">${escapeHtml(chunk.chunk_id.substring(0, 8))}...</span>
+                                    <span class="chunk-score">相似度: ${(chunk.score * 100).toFixed(1)}%</span>
+                                </div>
+                                <div class="chunk-content">${escapeHtml(chunk.content.substring(0, 100))}...</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        qaRecordsStats.innerHTML = `
+            <div class="stats-summary">
+                <span>检索次数: ${response.records.length}</span>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('加载Chunk QA检索记录失败:', error);
+        qaRecordsList.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+        qaRecordsStats.innerHTML = '';
+    }
+}
+
+async function loadQaRecordsByDocument(documentId) {
+    const qaRecordsList = document.getElementById('qaRecordsList');
+    const qaRecordsStats = document.getElementById('qaRecordsStats');
+    
+    try {
+        const response = await fetchAPI(`/qa/records/document/${documentId}`);
+        
+        if (response.records.length === 0) {
+            qaRecordsList.innerHTML = '<div class="empty-qa-records">该文档的Chunk未被检索过</div>';
+            qaRecordsStats.innerHTML = '';
+            return;
+        }
+        
+        qaRecordsList.innerHTML = response.records.map(record => `
+            <div class="qa-record-card">
+                <div class="qa-record-header">
+                    <div class="qa-record-question">
+                        <span class="question-label">问题:</span>
+                        <span class="question-text">${escapeHtml(record.question)}</span>
+                    </div>
+                    <span class="qa-record-time">${formatDate(record.created_at)}</span>
+                </div>
+                <div class="qa-record-answer">
+                    <span class="answer-label">答案:</span>
+                    <span class="answer-text">${escapeHtml(record.answer)}</span>
+                </div>
+                <div class="qa-record-chunks">
+                    <span class="chunks-label">检索到的Chunk (${record.retrieved_chunks.length}):</span>
+                    <div class="chunks-list">
+                        ${record.retrieved_chunks.map(chunk => `
+                            <div class="qa-record-chunk">
+                                <div class="chunk-header">
+                                    <span class="chunk-id">${escapeHtml(chunk.chunk_id.substring(0, 8))}...</span>
+                                    <span class="chunk-score">相似度: ${(chunk.score * 100).toFixed(1)}%</span>
+                                </div>
+                                <div class="chunk-content">${escapeHtml(chunk.content.substring(0, 100))}...</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        qaRecordsStats.innerHTML = `
+            <div class="stats-summary">
+                <span>检索次数: ${response.records.length}</span>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('加载文档QA检索记录失败:', error);
+        qaRecordsList.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+        qaRecordsStats.innerHTML = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const askBtn = document.getElementById('askBtn');
     const clearAnswerBtn = document.getElementById('clearAnswer');
     const questionInput = document.getElementById('questionInput');
+    const loadQaRecordsBtn = document.getElementById('loadQaRecords');
     
     askBtn.addEventListener('click', askQuestion);
     clearAnswerBtn.addEventListener('click', clearAnswer);
+    loadQaRecordsBtn.addEventListener('click', loadQaRecords);
     
     questionInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
