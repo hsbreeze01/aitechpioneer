@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -14,13 +15,23 @@ from aitechpioneer.application.use_cases import (
     RAGUseCase,
     create_embedding_service,
 )
-from aitechpioneer.domain.models import ChunkStatus, FileType
+from aitechpioneer.domain.models import ChunkStatus, FileType, TaskStatus
 from aitechpioneer.infrastructure.chunking import ParentChildChunker
 from aitechpioneer.infrastructure.db import QdrantDatabase
 from aitechpioneer.infrastructure.deepseek_llm import DeepSeekLLMService
 from aitechpioneer.infrastructure.document_parser import DocumentParser
+from aitechpioneer.infrastructure.task_manager import task_manager
+from aitechpioneer.settings import settings
+
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()],
+    force=True
+)
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 app = FastAPI(
     title="RAG System API",
@@ -198,6 +209,31 @@ class QARetrievalListResponse(BaseModel):
     total: int
 
 
+class UploadTaskInfo(BaseModel):
+    task_id: str
+    file_name: str
+    file_type: str
+    display_name: Optional[str] = None
+    status: str
+    progress: int
+    document_id: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class UploadTaskListResponse(BaseModel):
+    tasks: List[UploadTaskInfo]
+    total: int
+
+
+class UploadTaskCreateResponse(BaseModel):
+    task_id: str
+    file_name: str
+    status: str
+    message: str
+
+
 class QARetrievalStatisticsResponse(BaseModel):
     total_records: int
     total_questions: int
@@ -340,6 +376,7 @@ async def get_document(document_id: str, collection_name: str = "documents"):
             file_type=document["file_type"],
             file_path=document.get("file_path"),
             uploaded_at=document["uploaded_at"],
+            chunk_count=document.get("chunk_count", 0),
         )
     except HTTPException:
         raise
@@ -402,6 +439,301 @@ async def upload_document(
         raise
     except Exception as e:
         logger.error(f"Error uploading document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/api/documents/upload-async",
+    response_model=UploadTaskCreateResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def upload_document_async(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    file_type: str = Form(...),
+    display_name: Optional[str] = Form(None),
+    collection_name: str = Form("documents"),
+):
+    try:
+        if file_type not in [ft.value for ft in FileType]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Must be one of: {[ft.value for ft in FileType]}",
+            )
+
+        file_type_enum = FileType(file_type)
+
+        content = await file.read()
+
+        task = await task_manager.create_task(
+            file_name=file.filename or "unknown",
+            file_type=file_type_enum,
+            display_name=display_name,
+        )
+
+        logger.info(f"Created upload task {task.task_id} for file {file.filename}")
+
+        logger.info(f"About to add background task for {task.task_id}...")
+        background_tasks.add_task(
+            _process_upload_task,
+            task_id=task.task_id,
+            file_content=content,
+            file_name=file.filename or "unknown",
+            file_type=file_type_enum,
+            display_name=display_name,
+            collection_name=collection_name,
+        )
+        logger.info(f"Background task added successfully for {task.task_id}")
+
+        return UploadTaskCreateResponse(
+            task_id=task.task_id,
+            file_name=task.file_name,
+            status=task.status.value,
+            message="Upload task created successfully",
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating upload task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _process_upload_task(
+    task_id: str,
+    file_content: bytes,
+    file_name: str,
+    file_type: FileType,
+    display_name: Optional[str],
+    collection_name: str,
+):
+    import os
+    import tempfile
+
+    temp_file_path = None
+    try:
+        logger.info(f"[{task_id}] Starting upload task processing")
+        
+        await task_manager.update_task(task_id, TaskStatus.UPLOADING, progress=10)
+        logger.info(f"[{task_id}] Task status updated to UPLOADING")
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type.value}")
+        temp_file.write(file_content)
+        temp_file.close()
+        temp_file_path = temp_file.name
+        logger.info(f"[{task_id}] Temp file created: {temp_file_path}")
+
+        await task_manager.update_task(task_id, TaskStatus.PROCESSING, progress=30)
+        logger.info(f"[{task_id}] Task status updated to PROCESSING")
+
+        document_upload_use_case, _, _, _ = get_use_cases()
+        logger.info(f"[{task_id}] Got document_upload_use_case")
+
+        logger.info(f"[{task_id}] Calling document_upload_use_case.execute...")
+        document = await document_upload_use_case.execute(
+            file_path=temp_file_path,
+            file_type=file_type,
+            collection_name=collection_name,
+            display_name=display_name,
+        )
+        logger.info(f"[{task_id}] Document upload completed, document_id: {document.document_id}")
+
+        await task_manager.update_task(
+            task_id,
+            TaskStatus.COMPLETED,
+            progress=100,
+            document_id=document.document_id,
+        )
+        logger.info(f"[{task_id}] Task status updated to COMPLETED")
+
+        logger.info(f"Upload task {task_id} completed successfully")
+
+    except Exception as e:
+        logger.error(f"[{task_id}] Error processing upload task: {e}", exc_info=True)
+        await task_manager.update_task(
+            task_id,
+            TaskStatus.FAILED,
+            error_message=str(e),
+        )
+        logger.error(f"[{task_id}] Task status updated to FAILED: {str(e)}")
+
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+                logger.info(f"[{task_id}] Temp file removed: {temp_file_path}")
+            except Exception as e:
+                logger.error(f"[{task_id}] Error removing temp file {temp_file_path}: {e}")
+
+
+@app.get(
+    "/api/upload-tasks",
+    response_model=UploadTaskListResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+async def get_upload_tasks():
+    try:
+        tasks = await task_manager.get_all_tasks()
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        valid_tasks = []
+        for task in tasks:
+            if task.status == TaskStatus.COMPLETED and task.document_id:
+                try:
+                    document = await chunk_manager_use_case.vector_database.get_document(
+                        "documents", task.document_id
+                    )
+                    if not document:
+                        logger.warning(f"Task {task.task_id} marked as completed but document {task.document_id} not found in database")
+                        await task_manager.update_task(
+                            task.task_id,
+                            TaskStatus.FAILED,
+                            error_message=f"Document {task.document_id} not found in database"
+                        )
+                        task.status = TaskStatus.FAILED
+                        task.error_message = f"Document {task.document_id} not found in database"
+                except Exception as e:
+                    logger.error(f"Error validating document for task {task.task_id}: {e}")
+
+            valid_tasks.append(task)
+
+        task_infos = [
+            UploadTaskInfo(
+                task_id=task.task_id,
+                file_name=task.file_name,
+                file_type=task.file_type.value,
+                display_name=task.display_name,
+                status=task.status.value,
+                progress=task.progress,
+                document_id=task.document_id,
+                error_message=task.error_message,
+                created_at=task.created_at.isoformat(),
+                updated_at=task.updated_at.isoformat(),
+            )
+            for task in valid_tasks
+        ]
+
+        return UploadTaskListResponse(
+            tasks=task_infos,
+            total=len(task_infos),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting upload tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/upload-tasks/{task_id}",
+    response_model=UploadTaskInfo,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_upload_task(task_id: str):
+    try:
+        task = await task_manager.get_task(task_id)
+
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+        return UploadTaskInfo(
+            task_id=task.task_id,
+            file_name=task.file_name,
+            file_type=task.file_type.value,
+            display_name=task.display_name,
+            status=task.status.value,
+            progress=task.progress,
+            document_id=task.document_id,
+            error_message=task.error_message,
+            created_at=task.created_at.isoformat(),
+            updated_at=task.updated_at.isoformat(),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting upload task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete(
+    "/api/upload-tasks/{task_id}",
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def delete_upload_task(task_id: str):
+    try:
+        deleted = await task_manager.delete_task(task_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+        return {"message": f"Task {task_id} deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting upload task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
+    "/api/upload-tasks/{task_id}/retry",
+    response_model=UploadTaskInfo,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def retry_upload_task(task_id: str):
+    try:
+        task = await task_manager.get_task(task_id)
+
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+        if task.status != TaskStatus.FAILED:
+            raise HTTPException(status_code=400, detail="Only failed tasks can be retried")
+
+        await task_manager.retry_task(task_id)
+
+        retried_task = await task_manager.get_task(task_id)
+
+        if not retried_task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found after retry")
+
+        return UploadTaskInfo(
+            task_id=retried_task.task_id,
+            file_name=retried_task.file_name,
+            file_type=retried_task.file_type.value,
+            display_name=retried_task.display_name,
+            status=retried_task.status.value,
+            progress=retried_task.progress,
+            document_id=retried_task.document_id,
+            error_message=retried_task.error_message,
+            created_at=retried_task.created_at.isoformat(),
+            updated_at=retried_task.updated_at.isoformat(),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying upload task {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _test_background_task(message: str):
+    print(f"[TEST PRINT] Background task executed: {message}")
+    logger.info(f"[TEST] Background task executed: {message}")
+
+
+@app.get(
+    "/api/test-background",
+    responses={500: {"model": ErrorResponse}},
+)
+async def test_background(background_tasks: BackgroundTasks):
+    try:
+        logger.info("[TEST] About to add background task...")
+        background_tasks.add_task(_test_background_task, "Test message")
+        logger.info("[TEST] Background task added successfully")
+        return {"message": "Background task added"}
+    except Exception as e:
+        logger.error(f"[TEST] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1012,15 +1344,37 @@ async def cleanup_old_qa_records(days: int = 7):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-frontend_dir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "frontend",
+@app.post(
+    "/api/test/create-invalid-task",
+    response_model=dict,
+    responses={500: {"model": ErrorResponse}},
 )
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+async def create_invalid_task():
+    try:
+        task = await task_manager.create_task(
+            file_name="AI 原生应用架构白皮书.pdf",
+            file_type=FileType.PDF,
+            display_name="AI 原生应用架构白皮书"
+        )
+        
+        await task_manager.update_task(
+            task.task_id,
+            TaskStatus.COMPLETED,
+            progress=100,
+            document_id="20996bee-e154-42d7-9c2a-23e909e6ba2a"
+        )
+        
+        return {
+            "message": "Invalid task created successfully",
+            "task_id": task.task_id,
+            "document_id": "20996bee-e154-42d7-9c2a-23e909e6ba2a"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating invalid task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)

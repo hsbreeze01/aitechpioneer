@@ -209,3 +209,48 @@ class QARetrievalRecord:
             model=model,
             usage=usage or {},
         )
+
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    UPLOADING = "uploading"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class UploadTask:
+    task_id: str = field(default_factory=lambda: str(uuid4()))
+    file_name: str = ""
+    file_type: FileType = FileType.TXT
+    display_name: Optional[str] = None
+    status: TaskStatus = TaskStatus.PENDING
+    progress: int = 0
+    document_id: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+
+    @classmethod
+    def create(
+        cls,
+        file_name: str,
+        file_type: FileType,
+        display_name: Optional[str] = None,
+    ) -> "UploadTask":
+        return cls(
+            file_name=file_name,
+            file_type=file_type,
+            display_name=display_name,
+        )
+
+    def update_status(self, status: TaskStatus, progress: int = 0, error_message: Optional[str] = None) -> None:
+        self.status = status
+        self.progress = progress
+        self.error_message = error_message
+        self.updated_at = datetime.utcnow()
+
+    def set_document_id(self, document_id: str) -> None:
+        self.document_id = document_id
+        self.updated_at = datetime.utcnow()

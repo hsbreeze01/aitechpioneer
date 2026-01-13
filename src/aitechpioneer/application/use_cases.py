@@ -59,7 +59,7 @@ class DocumentUploadUseCase:
         collection_name: str = "documents",
         display_name: Optional[str] = None,
     ) -> Document:
-        logger.info(f"Starting document upload: {file_path}")
+        logger.info(f"Starting document upload: {file_path}, type: {file_type}, display_name: {display_name}")
 
         document = None
 
@@ -71,10 +71,19 @@ class DocumentUploadUseCase:
                 display_name=display_name,
             )
 
+            logger.info(f"Created document object: document_id={document.document_id}, file_name={document.file_name}")
+
             logger.info(f"Parsing document: {file_path}")
             content, metadata = self.document_parser.parse(file_path, file_type)
             document.content = content
             document.metadata = metadata
+
+            logger.info(f"Document parsed successfully, content length: {len(content)}, metadata: {metadata}")
+
+            if not content or len(content.strip()) < 10:
+                error_msg = f"Document contains no extractable text or text is too short: {file_path}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             logger.info("Chunking document with Parent-Child strategy")
             chunks = self.chunker.chunk_document(
@@ -86,30 +95,37 @@ class DocumentUploadUseCase:
                 file_path=file_path,
             )
 
+            logger.info(f"Document chunked into {len(chunks)} chunks")
+
             logger.info(f"Generating embeddings for {len(chunks)} chunks")
             chunk_texts = [chunk.content for chunk in chunks]
             embeddings = await self.embedding_service.generate_embeddings(chunk_texts)
 
+            logger.info(f"Generated {len(embeddings)} embeddings, vector size: {len(embeddings[0]) if embeddings else 0}")
+
             logger.info(f"Storing chunks in vector database: {collection_name}")
             if not await self.vector_database.collection_exists(collection_name):
                 await self.vector_database.create_collection(collection_name, len(embeddings[0]))
+                logger.info(f"Created collection: {collection_name}")
 
             for chunk, embedding in zip(chunks, embeddings):
                 chunk.update_embedding(embedding)
 
+            logger.info(f"Inserting {len(chunks)} chunks into vector database...")
             await self.vector_database.insert_chunks(collection_name, chunks)
 
             document.status = DocumentStatus.COMPLETED
             document.updated_at = document.updated_at
 
-            logger.info(f"Document upload completed successfully: {document.document_id}")
+            logger.info(f"Document upload completed successfully: document_id={document.document_id}, status={document.status}")
             return document
 
         except Exception as e:
-            logger.error(f"Error during document upload: {e}")
+            logger.error(f"Error during document upload: {e}", exc_info=True)
             if document:
                 document.status = DocumentStatus.FAILED
                 document.updated_at = document.updated_at
+                logger.error(f"Document marked as failed: document_id={document.document_id}")
             raise
 
 

@@ -130,22 +130,42 @@ class QdrantDatabase(VectorDatabasePort):
 
     async def insert_chunks(self, collection_name: str, chunks: List[Chunk]) -> None:
         try:
-            points = []
-            for chunk in chunks:
-                point = PointStruct(
-                    id=chunk.chunk_id,
-                    vector=chunk.embedding,
-                    payload=self._chunk_to_payload(chunk),
-                )
-                points.append(point)
+            logger.info(f"Starting to insert {len(chunks)} chunks into collection '{collection_name}'")
+            
+            batch_size = 100
+            total_inserted = 0
 
-            self.client.upsert(
+            for i in range(0, len(chunks), batch_size):
+                batch = chunks[i:i + batch_size]
+                points = []
+                for chunk in batch:
+                    payload = self._chunk_to_payload(chunk)
+                    logger.debug(f"Preparing chunk {chunk.chunk_id} for insertion: document_id={chunk.document_id}, content_preview={chunk.content[:50] if chunk.content else 'N/A'}")
+                    point = PointStruct(
+                        id=chunk.chunk_id,
+                        vector=chunk.embedding,
+                        payload=payload,
+                    )
+                    points.append(point)
+
+                self.client.upsert(
+                    collection_name=collection_name,
+                    points=points,
+                )
+                total_inserted += len(batch)
+                logger.info(f"Inserted batch {total_inserted}/{len(chunks)} chunks into '{collection_name}'")
+
+            logger.info(f"Successfully inserted {len(chunks)} chunks into '{collection_name}'")
+            
+            # Verify insertion by querying the collection
+            result = self.client.scroll(
                 collection_name=collection_name,
-                points=points,
+                limit=10000,
             )
-            logger.info(f"Inserted {len(chunks)} chunks into '{collection_name}'")
+            logger.info(f"Collection '{collection_name}' now contains {len(result[0])} total points")
+            
         except Exception as e:
-            logger.error(f"Failed to insert chunks into '{collection_name}': {e}")
+            logger.error(f"Failed to insert chunks into '{collection_name}': {e}", exc_info=True)
             raise
 
     async def search_chunks(
@@ -263,58 +283,91 @@ class QdrantDatabase(VectorDatabasePort):
 
     async def get_all_documents(self, collection_name: str) -> List[Dict[str, Any]]:
         try:
+            logger.info(f"Retrieving all documents from collection '{collection_name}'")
+            
             result = self.client.scroll(
                 collection_name=collection_name,
                 limit=10000,
             )
 
+            logger.info(f"Retrieved {len(result[0])} points from collection '{collection_name}'")
+            
             documents = {}
             for point in result[0]:
                 if not point.payload:
+                    logger.warning(f"Point {point.id} has no payload, skipping")
                     continue
+                
                 document_id = point.payload.get("document_id")
-                if document_id:
-                    if document_id not in documents:
-                        documents[document_id] = {
-                            "document_id": document_id,
-                            "file_name": point.payload.get("metadata", {}).get("source_file", ""),
-                            "display_name": point.payload.get("metadata", {}).get("display_name"),
-                            "file_path": point.payload.get("metadata", {}).get("file_path"),
-                            "file_type": point.payload.get("metadata", {}).get("file_type", ""),
-                            "uploaded_at": point.payload.get("created_at", ""),
-                            "chunk_count": 0,
-                        }
-                    documents[document_id]["chunk_count"] += 1
-
-            return list(documents.values())
-        except Exception as e:
-            logger.error(f"Failed to get documents from '{collection_name}': {e}")
-            return []
-
-    async def get_document(
-        self, collection_name: str, document_id: str
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            result = self.client.scroll(
-                collection_name=collection_name,
-                limit=10000,
-            )
-
-            for point in result[0]:
-                if not point.payload:
+                if not document_id:
+                    logger.warning(f"Point {point.id} has no document_id in payload, skipping")
                     continue
-                if point.payload.get("document_id") == document_id:
-                    return {
+                
+                logger.debug(f"Processing point {point.id} with document_id={document_id}")
+                
+                if document_id not in documents:
+                    documents[document_id] = {
                         "document_id": document_id,
                         "file_name": point.payload.get("metadata", {}).get("source_file", ""),
                         "display_name": point.payload.get("metadata", {}).get("display_name"),
                         "file_path": point.payload.get("metadata", {}).get("file_path"),
                         "file_type": point.payload.get("metadata", {}).get("file_type", ""),
                         "uploaded_at": point.payload.get("created_at", ""),
+                        "chunk_count": 0,
                     }
+                    logger.debug(f"Created new document entry for document_id={document_id}")
+                
+                documents[document_id]["chunk_count"] += 1
+
+            document_list = list(documents.values())
+            logger.info(f"Found {len(document_list)} unique documents in collection '{collection_name}'")
+            
+            for doc in document_list:
+                logger.debug(f"Document: {doc['document_id']}, file_name={doc['file_name']}, chunk_count={doc['chunk_count']}")
+            
+            return document_list
+        except Exception as e:
+            logger.error(f"Failed to get documents from '{collection_name}': {e}", exc_info=True)
+            return []
+
+    async def get_document(
+        self, collection_name: str, document_id: str
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            logger.info(f"Retrieving document {document_id} from collection '{collection_name}'")
+            
+            result = self.client.scroll(
+                collection_name=collection_name,
+                limit=10000,
+            )
+
+            document_info = None
+            chunk_count = 0
+
+            for point in result[0]:
+                if not point.payload:
+                    continue
+                if point.payload.get("document_id") == document_id:
+                    if document_info is None:
+                        document_info = {
+                            "document_id": document_id,
+                            "file_name": point.payload.get("metadata", {}).get("source_file", ""),
+                            "display_name": point.payload.get("metadata", {}).get("display_name"),
+                            "file_path": point.payload.get("metadata", {}).get("file_path"),
+                            "file_type": point.payload.get("metadata", {}).get("file_type", ""),
+                            "uploaded_at": point.payload.get("created_at", ""),
+                        }
+                    chunk_count += 1
+
+            if document_info:
+                document_info["chunk_count"] = chunk_count
+                logger.info(f"Found document {document_id} with {chunk_count} chunks")
+                return document_info
+            
+            logger.warning(f"Document {document_id} not found in collection '{collection_name}'")
             return None
         except Exception as e:
-            logger.error(f"Failed to get document '{document_id}' from '{collection_name}': {e}")
+            logger.error(f"Failed to get document '{document_id}' from '{collection_name}': {e}", exc_info=True)
             return None
 
     async def get_all_chunks(self, collection_name: str) -> List[Chunk]:
