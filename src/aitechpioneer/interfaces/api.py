@@ -64,8 +64,11 @@ class DocumentUploadResponse(BaseModel):
 class DocumentInfo(BaseModel):
     document_id: str
     file_name: str
+    display_name: Optional[str] = None
     file_type: str
+    file_path: Optional[str] = None
     uploaded_at: str
+    chunk_count: int = 0
 
 
 class DocumentListResponse(BaseModel):
@@ -296,8 +299,11 @@ async def get_documents(collection_name: str = "documents") -> DocumentListRespo
             DocumentInfo(
                 document_id=doc["document_id"],
                 file_name=doc["file_name"],
+                display_name=doc.get("display_name"),
                 file_type=doc["file_type"],
+                file_path=doc.get("file_path"),
                 uploaded_at=doc["uploaded_at"],
+                chunk_count=doc["chunk_count"],
             )
             for doc in documents
         ]
@@ -311,6 +317,37 @@ async def get_documents(collection_name: str = "documents") -> DocumentListRespo
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get(
+    "/api/documents/{document_id}",
+    response_model=DocumentInfo,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_document(document_id: str, collection_name: str = "documents"):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        document = await chunk_manager_use_case.vector_database.get_document(
+            collection_name, document_id
+        )
+
+        if not document:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
+
+        return DocumentInfo(
+            document_id=document["document_id"],
+            file_name=document["file_name"],
+            display_name=document.get("display_name"),
+            file_type=document["file_type"],
+            file_path=document.get("file_path"),
+            uploaded_at=document["uploaded_at"],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post(
     "/api/documents/upload",
     response_model=DocumentUploadResponse,
@@ -319,6 +356,7 @@ async def get_documents(collection_name: str = "documents") -> DocumentListRespo
 async def upload_document(
     file: UploadFile = File(...),
     file_type: str = Form(...),
+    display_name: Optional[str] = Form(None),
     collection_name: str = Form("documents"),
 ):
     try:
@@ -345,6 +383,7 @@ async def upload_document(
                 file_path=temp_file_path,
                 file_type=file_type_enum,
                 collection_name=collection_name,
+                display_name=display_name,
             )
 
             return DocumentUploadResponse(

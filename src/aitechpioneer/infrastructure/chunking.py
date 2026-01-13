@@ -22,6 +22,8 @@ class ParentChildChunker:
         document_id: str,
         source_file: str,
         file_type: FileType,
+        display_name: Optional[str] = None,
+        file_path: Optional[str] = None,
     ) -> List[Chunk]:
         parent_chunk_dicts = self._create_parent_chunks(text)
         all_chunks = []
@@ -36,6 +38,8 @@ class ParentChildChunker:
                 end_char=parent_chunk_dict["end_char"],
                 source_file=source_file,
                 file_type=file_type,
+                display_name=display_name,
+                file_path=file_path,
             )
             all_chunks.append(parent_chunk_obj)
 
@@ -53,6 +57,8 @@ class ParentChildChunker:
                     source_file=source_file,
                     file_type=file_type,
                     parent_chunk_id=str(parent_chunk_obj.chunk_id),
+                    display_name=display_name,
+                    file_path=file_path,
                 )
                 all_chunks.append(child_chunk_obj)
 
@@ -139,11 +145,15 @@ class ParentChildChunker:
         source_file: str,
         file_type: FileType,
         parent_chunk_id: Optional[str] = None,
+        display_name: Optional[str] = None,
+        file_path: Optional[str] = None,
     ) -> Chunk:
         metadata = ChunkMetadata(
             source_file=source_file,
             file_type=file_type,
             word_count=len(content.split()) if content else 0,
+            display_name=display_name,
+            file_path=file_path,
         )
 
         return Chunk(

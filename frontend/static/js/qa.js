@@ -107,39 +107,6 @@ function clearAnswer() {
     document.getElementById('questionInput').value = '';
 }
 
-async function loadHistory() {
-    try {
-        const response = await fetchAPI('/documents');
-        console.log('API Response:', response);
-        console.log('Response type:', typeof response);
-        console.log('Response.documents:', response.documents);
-        console.log('Response.documents type:', typeof response.documents);
-        console.log('Response.documents is array:', Array.isArray(response.documents));
-        
-        const historyList = document.getElementById('historyList');
-        
-        if (response.documents.length === 0) {
-            historyList.innerHTML = '<div class="empty-history">暂无文档</div>';
-            return;
-        }
-        
-        historyList.innerHTML = response.documents.map(doc => `
-            <div class="history-item">
-                <div class="history-title">${escapeHtml(doc.file_name)}</div>
-                <div class="history-meta">
-                    <span>类型: ${escapeHtml(doc.file_type)}</span>
-                    <span>${formatDate(doc.uploaded_at)}</span>
-                </div>
-            </div>
-        `).join('');
-        
-    } catch (error) {
-        console.error('加载历史记录失败:', error);
-        const historyList = document.getElementById('historyList');
-        historyList.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
-    }
-}
-
 async function loadQaRecords() {
     const filter = document.getElementById('qaRecordsFilter').value;
     const qaRecordsList = document.getElementById('qaRecordsList');
@@ -343,6 +310,4 @@ document.addEventListener('DOMContentLoaded', () => {
             askQuestion();
         }
     });
-    
-    loadHistory();
 });

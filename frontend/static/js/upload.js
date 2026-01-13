@@ -118,6 +118,11 @@ uploadBtn.addEventListener('click', async () => {
         formData.append('file_type', getFileType(selectedFile.name));
         formData.append('collection_name', 'documents');
         
+        const documentTitle = document.getElementById('documentTitle').value.trim();
+        if (documentTitle) {
+            formData.append('display_name', documentTitle);
+        }
+        
         const response = await fetch(`${API_BASE_URL}/documents/upload`, {
             method: 'POST',
             body: formData,

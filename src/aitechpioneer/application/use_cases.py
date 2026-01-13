@@ -57,17 +57,18 @@ class DocumentUploadUseCase:
         file_path: str,
         file_type: FileType,
         collection_name: str = "documents",
+        display_name: Optional[str] = None,
     ) -> Document:
         logger.info(f"Starting document upload: {file_path}")
 
         document = None
 
         try:
-            document = Document(
+            document = Document.create(
                 file_name=file_path.split("/")[-1],
                 file_type=file_type,
                 file_path=file_path,
-                status=DocumentStatus.PROCESSING,
+                display_name=display_name,
             )
 
             logger.info(f"Parsing document: {file_path}")
@@ -81,6 +82,8 @@ class DocumentUploadUseCase:
                 document_id=document.document_id,
                 source_file=file_path,
                 file_type=file_type,
+                display_name=display_name,
+                file_path=file_path,
             )
 
             logger.info(f"Generating embeddings for {len(chunks)} chunks")

@@ -35,6 +35,7 @@ class Document:
     file_name: str
     file_type: FileType
     file_path: str
+    display_name: Optional[str] = None
     document_id: str = field(default_factory=lambda: str(uuid4()))
     status: DocumentStatus = DocumentStatus.PENDING
     metadata: DocumentMetadata = field(default_factory=DocumentMetadata)
@@ -44,16 +45,22 @@ class Document:
 
     @classmethod
     def create(
-        cls, file_name: str, file_type: FileType, file_path: str, content: str = ""
+        cls,
+        file_name: str,
+        file_type: FileType,
+        file_path: str,
+        display_name: Optional[str] = None,
+        content: str = "",
     ) -> "Document":
         metadata = DocumentMetadata(
-            title=file_name,
+            title=display_name or file_name,
             word_count=len(content.split()) if content else 0,
         )
         return cls(
             file_name=file_name,
             file_type=file_type,
             file_path=file_path,
+            display_name=display_name,
             content=content,
             metadata=metadata,
         )
@@ -93,6 +100,8 @@ class ChunkMetadata:
     section_title: Optional[str] = None
     word_count: int = 0
     token_count: int = 0
+    display_name: Optional[str] = None
+    file_path: Optional[str] = None
     extra: Dict[str, Any] = field(default_factory=dict)
 
 

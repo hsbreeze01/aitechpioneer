@@ -37,23 +37,27 @@ async function loadDocuments() {
         documentsList.innerHTML = documents.map(doc => `
             <div class="document-card">
                 <div class="document-header">
-                    <div class="document-title">${escapeHtml(doc.file_name)}</div>
+                    <div class="document-title">${escapeHtml(doc.display_name || doc.file_name)}</div>
                     <div class="document-actions">
                         <a href="/document-detail.html?id=${doc.document_id}" class="btn btn-secondary btn-small">查看详情</a>
                     </div>
                 </div>
-                <div class="document-meta">
-                    <div class="meta-item">
-                        <span>📄</span>
-                        <span>${escapeHtml(doc.file_name)}</span>
+                <div class="document-meta-vertical">
+                    <div class="meta-row">
+                        <span class="meta-label">📄 文件名:</span>
+                        <span class="meta-value">${escapeHtml(doc.file_name)}</span>
                     </div>
-                    <div class="meta-item">
-                        <span>📁</span>
-                        <span>${escapeHtml(doc.file_type)}</span>
+                    <div class="meta-row">
+                        <span class="meta-label">📁 文件类型:</span>
+                        <span class="meta-value">${escapeHtml(doc.file_type)}</span>
                     </div>
-                    <div class="meta-item">
-                        <span>📅</span>
-                        <span>${formatDate(doc.uploaded_at)}</span>
+                    <div class="meta-row">
+                        <span class="meta-label">📅 上传时间:</span>
+                        <span class="meta-value">${formatDate(doc.uploaded_at)}</span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label">🧩 Chunk数量:</span>
+                        <span class="meta-value">${doc.chunk_count}</span>
                     </div>
                 </div>
             </div>

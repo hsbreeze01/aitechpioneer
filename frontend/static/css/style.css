@@ -563,6 +563,31 @@ body {
     flex-wrap: wrap;
 }
 
+.document-meta-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.meta-label {
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-width: 100px;
+}
+
+.meta-value {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
 .meta-item {
     display: flex;
     align-items: center;
@@ -895,29 +920,34 @@ body {
 
 .document-info {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
     padding: 1.5rem;
     background: var(--bg-secondary);
     border-radius: var(--radius-md);
+    align-items: start;
 }
 
 .info-item {
     display: flex;
     flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
 }
 
 .info-label {
     font-weight: 600;
     color: var(--text-secondary);
     font-size: 0.75rem;
-    margin-bottom: 0.25rem;
+    white-space: nowrap;
 }
 
 .info-value {
     color: var(--text-primary);
     font-size: 0.875rem;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 .chunks-header {

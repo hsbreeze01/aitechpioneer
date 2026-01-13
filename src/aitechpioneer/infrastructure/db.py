@@ -78,6 +78,8 @@ class QdrantDatabase(VectorDatabasePort):
                     "section_title": chunk.metadata.section_title if chunk.metadata else None,
                     "word_count": chunk.metadata.word_count if chunk.metadata else 0,
                     "token_count": chunk.metadata.token_count if chunk.metadata else 0,
+                    "display_name": chunk.metadata.display_name if chunk.metadata else None,
+                    "file_path": chunk.metadata.file_path if chunk.metadata else None,
                 }
                 if chunk.metadata
                 else {}
@@ -95,6 +97,8 @@ class QdrantDatabase(VectorDatabasePort):
                 section_title=metadata_dict.get("section_title"),
                 word_count=metadata_dict.get("word_count", 0),
                 token_count=metadata_dict.get("token_count", 0),
+                display_name=metadata_dict.get("display_name"),
+                file_path=metadata_dict.get("file_path"),
             )
 
         chunk_id_str = payload.get("chunk_id", str(point_id))
@@ -269,18 +273,49 @@ class QdrantDatabase(VectorDatabasePort):
                 if not point.payload:
                     continue
                 document_id = point.payload.get("document_id")
-                if document_id and document_id not in documents:
-                    documents[document_id] = {
-                        "document_id": document_id,
-                        "file_name": point.payload.get("metadata", {}).get("source_file", ""),
-                        "file_type": point.payload.get("metadata", {}).get("file_type", ""),
-                        "uploaded_at": point.payload.get("created_at", ""),
-                    }
+                if document_id:
+                    if document_id not in documents:
+                        documents[document_id] = {
+                            "document_id": document_id,
+                            "file_name": point.payload.get("metadata", {}).get("source_file", ""),
+                            "display_name": point.payload.get("metadata", {}).get("display_name"),
+                            "file_path": point.payload.get("metadata", {}).get("file_path"),
+                            "file_type": point.payload.get("metadata", {}).get("file_type", ""),
+                            "uploaded_at": point.payload.get("created_at", ""),
+                            "chunk_count": 0,
+                        }
+                    documents[document_id]["chunk_count"] += 1
 
             return list(documents.values())
         except Exception as e:
             logger.error(f"Failed to get documents from '{collection_name}': {e}")
             return []
+
+    async def get_document(
+        self, collection_name: str, document_id: str
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            result = self.client.scroll(
+                collection_name=collection_name,
+                limit=10000,
+            )
+
+            for point in result[0]:
+                if not point.payload:
+                    continue
+                if point.payload.get("document_id") == document_id:
+                    return {
+                        "document_id": document_id,
+                        "file_name": point.payload.get("metadata", {}).get("source_file", ""),
+                        "display_name": point.payload.get("metadata", {}).get("display_name"),
+                        "file_path": point.payload.get("metadata", {}).get("file_path"),
+                        "file_type": point.payload.get("metadata", {}).get("file_type", ""),
+                        "uploaded_at": point.payload.get("created_at", ""),
+                    }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get document '{document_id}' from '{collection_name}': {e}")
+            return None
 
     async def get_all_chunks(self, collection_name: str) -> List[Chunk]:
         try:

@@ -53,6 +53,10 @@ class VectorDatabasePort(ABC):
     async def get_all_documents(self, collection_name: str) -> List[Dict]:
         pass
 
+    @abstractmethod
+    async def get_document(self, collection_name: str, document_id: str) -> Optional[Dict]:
+        pass
+
 
 class EmbeddingServicePort(ABC):
     @abstractmethod

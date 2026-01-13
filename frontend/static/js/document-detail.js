@@ -33,21 +33,44 @@ async function loadDocumentDetail() {
     }
     
     try {
-        const document = await fetchAPI(`/documents/${currentDocumentId}`);
+        console.log('开始加载文档详情，ID:', currentDocumentId);
+        console.log('document 对象类型:', typeof document);
+        console.log('document.getElementById 类型:', typeof document.getElementById);
         
-        document.getElementById('documentTitle').textContent = document.title;
-        document.getElementById('fileName').textContent = document.file_name;
-        document.getElementById('fileType').textContent = document.file_type;
-        document.getElementById('uploadTime').textContent = formatDate(document.uploaded_at);
+        const doc = await fetchAPI(`/documents/${currentDocumentId}`);
+        console.log('获取到文档数据:', doc);
         
+        console.log('设置 documentTitle...');
+        document.getElementById('documentTitle').textContent = doc.display_name || doc.file_name;
+        
+        console.log('设置 fileName...');
+        document.getElementById('fileName').textContent = doc.file_name;
+        
+        console.log('设置 fileType...');
+        document.getElementById('fileType').textContent = doc.file_type;
+        
+        console.log('设置 filePath...');
+        document.getElementById('filePath').textContent = doc.file_path || '-';
+        
+        console.log('设置 uploadTime...');
+        document.getElementById('uploadTime').textContent = formatDate(doc.uploaded_at);
+        
+        console.log('获取 chunks...');
         const chunks = await fetchAPI(`/documents/${currentDocumentId}/chunks`);
-        document.getElementById('chunkCount').textContent = chunks.length;
-        currentChunks = chunks;
+        console.log('获取到 chunks 数据:', chunks);
         
+        console.log('设置 chunkCount...');
+        document.getElementById('chunkCount').textContent = chunks.total;
+        currentChunks = chunks.chunks;
+        
+        console.log('加载 chunks 列表...');
         loadChunks();
         
     } catch (error) {
         console.error('加载文档详情失败:', error);
+        console.error('错误堆栈:', error.stack);
+        console.error('document 对象类型:', typeof document);
+        console.error('document.getElementById 类型:', typeof document.getElementById);
         alert('加载文档详情失败: ' + error.message);
         window.location.href = '/documents.html';
     }
@@ -77,14 +100,14 @@ function loadChunks(filter = 'all') {
             <div class="chunk-header">
                 <div class="chunk-content">${escapeHtml(chunk.content.substring(0, 200))}${chunk.content.length > 200 ? '...' : ''}</div>
                 <div class="chunk-actions">
-                    <button class="btn btn-secondary btn-small" onclick="openEditModal('${chunk.id}')">编辑</button>
-                    <button class="btn btn-secondary btn-small" onclick="deleteChunk('${chunk.id}')">删除</button>
+                    <button class="btn btn-secondary btn-small" onclick="openEditModal('${chunk.chunk_id}')">编辑</button>
+                    <button class="btn btn-secondary btn-small" onclick="deleteChunk('${chunk.chunk_id}')">删除</button>
                 </div>
             </div>
             <div class="chunk-meta">
                 <div class="meta-item">
                     <span>📍</span>
-                    <span>位置: ${chunk.start_char} - ${chunk.end_char}</span>
+                    <span>位置: ${chunk.start_index} - ${chunk.end_index}</span>
                 </div>
                 <div class="meta-item">
                     <span>📊</span>
@@ -156,7 +179,7 @@ function formatDate(dateString) {
 }
 
 function openEditModal(chunkId) {
-    const chunk = currentChunks.find(c => c.id === chunkId);
+    const chunk = currentChunks.find(c => c.chunk_id === chunkId);
     if (!chunk) return;
     
     editingChunkId = chunkId;
