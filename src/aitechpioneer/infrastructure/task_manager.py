@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional
-from uuid import uuid4
 
 from src.aitechpioneer.domain.models import FileType, TaskStatus, UploadTask
 
@@ -61,10 +60,10 @@ class TaskManager:
                 age = now - task.created_at
                 if age.total_seconds() > max_age_hours * 3600:
                     to_delete.append(task_id)
-            
+
             for task_id in to_delete:
                 del self.tasks[task_id]
-            
+
             return len(to_delete)
 
     async def retry_task(self, task_id: str) -> Optional[UploadTask]:

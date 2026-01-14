@@ -1,13 +1,11 @@
-import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from aitechpioneer.application.use_cases import (
@@ -173,6 +171,14 @@ class ChunkDeleteResponse(BaseModel):
     message: str
 
 
+class ChunkAdjacentResponse(BaseModel):
+    chunk_id: str
+    prev: Optional[ChunkInfo]
+    next: Optional[ChunkInfo]
+    prev_chunks: List[ChunkInfo]
+    next_chunks: List[ChunkInfo]
+
+
 class ChunkMergeForwardResponse(BaseModel):
     chunk_id: str
     message: str
@@ -245,11 +251,26 @@ class QARetrievalRecordInfo(BaseModel):
     retrieved_chunks: List[Dict[str, Any]]
     model: str
     created_at: str
+    user_feedback: Optional[Dict[str, Any]] = None
 
 
 class QARetrievalListResponse(BaseModel):
     records: List[QARetrievalRecordInfo]
     total: int
+
+
+class UserFeedbackRequest(BaseModel):
+    record_id: str
+    rating: Optional[int] = None
+    is_helpful: Optional[bool] = None
+    is_resolved: Optional[bool] = None
+    comment: Optional[str] = None
+
+
+class UserFeedbackResponse(BaseModel):
+    success: bool
+    message: str
+    record_id: str
 
 
 class UploadTaskInfo(BaseModel):
@@ -303,6 +324,7 @@ class QuestionResponse(BaseModel):
     sources: List[Dict[str, Any]]
     model: str
     usage: Dict[str, int]
+    record_id: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):
@@ -354,6 +376,7 @@ async def root() -> dict[str, Any]:
             "documents": "/api/documents",
             "chunks": "/api/chunks",
             "questions": "/api/questions",
+            "chunks_adjacent": "/api/chunks/{chunk_id}/adjacent",
         },
     }
 
@@ -556,7 +579,7 @@ async def _process_upload_task(
     temp_file_path = None
     try:
         logger.info(f"[{task_id}] Starting upload task processing")
-        
+
         await task_manager.update_task(task_id, TaskStatus.UPLOADING, progress=10)
         logger.info(f"[{task_id}] Task status updated to UPLOADING")
 
@@ -627,7 +650,10 @@ async def get_upload_tasks():
                         "documents", task.document_id
                     )
                     if not document:
-                        logger.warning(f"Task {task.task_id} marked as completed but document {task.document_id} not found in database")
+                        logger.warning(
+                            f"Task {task.task_id} marked as completed but "
+                            f"document {task.document_id} not found in database"
+                        )
                         await task_manager.update_task(
                             task.task_id,
                             TaskStatus.FAILED,
@@ -791,11 +817,13 @@ async def get_all_chunks(collection_name: str = "documents", chunk_id: Optional[
 
         if chunk_id:
             chunk_uuid = UUID(chunk_id)
-            chunk = await chunk_manager_use_case.vector_database.get_chunk_by_id(collection_name, chunk_uuid)
-            
+            chunk = await chunk_manager_use_case.vector_database.get_chunk_by_id(
+                collection_name, chunk_uuid
+            )
+
             if not chunk:
                 raise HTTPException(status_code=404, detail=f"Chunk with ID {chunk_id} not found")
-            
+
             chunk_infos = [
                 ChunkInfo(
                     chunk_id=str(chunk.chunk_id),
@@ -1099,6 +1127,112 @@ async def delete_chunk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get(
+    "/api/chunks/{chunk_id}/adjacent",
+    response_model=ChunkAdjacentResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_adjacent_chunks(
+    chunk_id: str,
+    collection_name: str = "documents",
+    similarity_threshold: float = 0.3,
+    max_adjacent: int = 5,
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        adjacent_chunks = await chunk_manager_use_case.vector_database.get_adjacent_chunks(
+            collection_name=collection_name,
+            chunk_id=UUID(chunk_id),
+            similarity_threshold=similarity_threshold,
+            max_adjacent=max_adjacent,
+        )
+
+        prev_chunk = adjacent_chunks.get("prev")
+        next_chunk = adjacent_chunks.get("next")
+        prev_chunks_list = adjacent_chunks.get("prev_chunks") or []
+        next_chunks_list = adjacent_chunks.get("next_chunks") or []
+
+        prev_chunk_info = None
+        next_chunk_info = None
+
+        if prev_chunk:
+            prev_chunk_info = ChunkInfo(
+                chunk_id=str(prev_chunk.chunk_id),
+                document_id=prev_chunk.document_id,
+                content=prev_chunk.content,
+                chunk_type=prev_chunk.chunk_type.value,
+                status=prev_chunk.status.value,
+                quality=prev_chunk.quality.value,
+                version=prev_chunk.version,
+                start_index=prev_chunk.start_char,
+                end_index=prev_chunk.end_char,
+                derived_from=prev_chunk.derived_from,
+                merged_from=prev_chunk.merged_from,
+            )
+
+        if next_chunk:
+            next_chunk_info = ChunkInfo(
+                chunk_id=str(next_chunk.chunk_id),
+                document_id=next_chunk.document_id,
+                content=next_chunk.content,
+                chunk_type=next_chunk.chunk_type.value,
+                status=next_chunk.status.value,
+                quality=next_chunk.quality.value,
+                version=next_chunk.version,
+                start_index=next_chunk.start_char,
+                end_index=next_chunk.end_char,
+                derived_from=next_chunk.derived_from,
+                merged_from=next_chunk.merged_from,
+            )
+
+        prev_chunks_info = [
+            ChunkInfo(
+                chunk_id=str(c.chunk_id),
+                document_id=c.document_id,
+                content=c.content,
+                chunk_type=c.chunk_type.value,
+                status=c.status.value,
+                quality=c.quality.value,
+                version=c.version,
+                start_index=c.start_char,
+                end_index=c.end_char,
+                derived_from=c.derived_from,
+                merged_from=c.merged_from,
+            )
+            for c in (prev_chunks_list or [])
+        ]
+
+        next_chunks_info = [
+            ChunkInfo(
+                chunk_id=str(c.chunk_id),
+                document_id=c.document_id,
+                content=c.content,
+                chunk_type=c.chunk_type.value,
+                status=c.status.value,
+                quality=c.quality.value,
+                version=c.version,
+                start_index=c.start_char,
+                end_index=c.end_char,
+                derived_from=c.derived_from,
+                merged_from=c.merged_from,
+            )
+            for c in (next_chunks_list or [])
+        ]
+
+        return ChunkAdjacentResponse(
+            chunk_id=chunk_id,
+            prev=prev_chunk_info,
+            next=next_chunk_info,
+            prev_chunks=prev_chunks_info,
+            next_chunks=next_chunks_info,
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting adjacent chunks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post(
     "/api/questions/answer",
     response_model=QuestionResponse,
@@ -1121,6 +1255,7 @@ async def answer_question(request: QuestionRequest):
             sources=response["sources"],
             model=response["model"],
             usage=response["usage"],
+            record_id=response.get("record_id"),
         )
 
     except Exception as e:
@@ -1247,7 +1382,10 @@ async def get_chunk_history(
     collection_name: str = "documents",
 ):
     try:
-        logger.info(f"API: Getting chunk history for chunk_id={chunk_id}, collection_name={collection_name}")
+        logger.info(
+            f"API: Getting chunk history for chunk_id={chunk_id}, "
+            f"collection_name={collection_name}"
+        )
         _, chunk_manager_use_case, _, _ = get_use_cases()
 
         history = await chunk_manager_use_case.get_chunk_history(
@@ -1414,6 +1552,16 @@ async def get_qa_records():
                 ],
                 model=record.model,
                 created_at=record.created_at.isoformat(),
+                user_feedback=(
+                    {
+                        "rating": record.user_feedback.rating,
+                        "is_helpful": record.user_feedback.is_helpful,
+                        "is_resolved": record.user_feedback.is_resolved,
+                        "comment": record.user_feedback.comment,
+                    }
+                    if record.user_feedback
+                    else None
+                ),
             )
             for record in records
         ]
@@ -1563,6 +1711,95 @@ async def cleanup_old_qa_records(days: int = 7):
 
 
 @app.post(
+    "/api/qa/feedback",
+    response_model=UserFeedbackResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def submit_qa_feedback(request: UserFeedbackRequest):
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        success = await qa_retrieval_use_case.add_feedback(
+            record_id=request.record_id,
+            rating=request.rating,
+            is_helpful=request.is_helpful,
+            is_resolved=request.is_resolved,
+            comment=request.comment,
+        )
+
+        if success:
+            return UserFeedbackResponse(
+                success=True,
+                message="反馈提交成功",
+                record_id=request.record_id,
+            )
+        else:
+            return UserFeedbackResponse(
+                success=False,
+                message="反馈提交失败",
+                record_id=request.record_id,
+            )
+
+    except Exception as e:
+        logger.error(f"Error submitting QA feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/qa/records/unsatisfied",
+    response_model=QARetrievalListResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+async def get_unsatisfied_qa_records():
+    try:
+        _, _, _, qa_retrieval_use_case = get_use_cases()
+
+        records = await qa_retrieval_use_case.get_unsatisfied_records()
+
+        record_infos = [
+            QARetrievalRecordInfo(
+                record_id=str(record.record_id),
+                question=record.question,
+                answer=record.answer,
+                retrieved_chunks=[
+                    {
+                        "chunk_id": str(chunk.chunk_id),
+                        "document_id": chunk.document_id,
+                        "content": chunk.content,
+                        "score": chunk.score,
+                        "chunk_index": chunk.chunk_index,
+                        "start_char": chunk.start_char,
+                        "end_char": chunk.end_char,
+                    }
+                    for chunk in record.retrieved_chunks
+                ],
+                model=record.model,
+                created_at=record.created_at.isoformat(),
+                user_feedback=(
+                    {
+                        "rating": record.user_feedback.rating,
+                        "is_helpful": record.user_feedback.is_helpful,
+                        "is_resolved": record.user_feedback.is_resolved,
+                        "comment": record.user_feedback.comment,
+                    }
+                    if record.user_feedback
+                    else None
+                ),
+            )
+            for record in records
+        ]
+
+        return QARetrievalListResponse(
+            records=record_infos,
+            total=len(record_infos),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting unsatisfied QA records: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post(
     "/api/test/create-invalid-task",
     response_model=dict,
     responses={500: {"model": ErrorResponse}},
@@ -1574,20 +1811,20 @@ async def create_invalid_task():
             file_type=FileType.PDF,
             display_name="AI 原生应用架构白皮书"
         )
-        
+
         await task_manager.update_task(
             task.task_id,
             TaskStatus.COMPLETED,
             progress=100,
             document_id="20996bee-e154-42d7-9c2a-23e909e6ba2a"
         )
-        
+
         return {
             "message": "Invalid task created successfully",
             "task_id": task.task_id,
             "document_id": "20996bee-e154-42d7-9c2a-23e909e6ba2a"
         }
-        
+
     except Exception as e:
         logger.error(f"Error creating invalid task: {e}")
         raise HTTPException(status_code=500, detail=str(e))

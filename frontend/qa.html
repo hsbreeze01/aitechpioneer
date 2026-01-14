@@ -66,6 +66,40 @@
                             <h4 class="sources-title">相关来源</h4>
                             <div id="sourcesList" class="sources-list"></div>
                         </div>
+                        <div id="feedbackSection" class="feedback-section hidden">
+                            <h4 class="feedback-title">您对这个答案满意吗？</h4>
+                            <div class="feedback-buttons">
+                                <button id="feedbackSatisfied" class="btn btn-success btn-small">满意</button>
+                                <button id="feedbackUnsatisfied" class="btn btn-danger btn-small">不满意</button>
+                            </div>
+                            <div id="feedbackForm" class="feedback-form hidden">
+                                <div class="form-group">
+                                    <label class="form-label">评分 (1-5):</label>
+                                    <select id="feedbackRating" class="form-input">
+                                        <option value="5">5 - 非常满意</option>
+                                        <option value="4">4 - 满意</option>
+                                        <option value="3">3 - 一般</option>
+                                        <option value="2">2 - 不满意</option>
+                                        <option value="1">1 - 非常不满意</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">是否解决了您的问题？</label>
+                                    <select id="feedbackResolved" class="form-input">
+                                        <option value="true">是，解决了</option>
+                                        <option value="false">否，未解决</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">评论 (可选):</label>
+                                    <textarea id="feedbackComment" class="form-textarea" rows="3" placeholder="请告诉我们您的想法..."></textarea>
+                                </div>
+                                <div class="feedback-actions">
+                                    <button id="submitFeedback" class="btn btn-primary">提交反馈</button>
+                                    <button id="cancelFeedback" class="btn btn-secondary">取消</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="qaRecordsSection" class="qa-records-section">
@@ -94,6 +128,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/qa.js?v=4"></script>
+    <script src="/static/js/qa.js?v=5"></script>
 </body>
 </html>

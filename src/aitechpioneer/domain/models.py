@@ -222,6 +222,7 @@ class QARetrievalRecord:
     retrieved_chunks: List[RetrievedChunk] = field(default_factory=list)
     model: str = ""
     usage: Dict[str, Any] = field(default_factory=dict)
+    user_feedback: Optional["UserFeedback"] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     @classmethod
@@ -232,6 +233,7 @@ class QARetrievalRecord:
         retrieved_chunks: List[RetrievedChunk],
         model: str = "",
         usage: Optional[Dict[str, Any]] = None,
+        user_feedback: Optional["UserFeedback"] = None,
     ) -> "QARetrievalRecord":
         return cls(
             question=question,
@@ -239,6 +241,7 @@ class QARetrievalRecord:
             retrieved_chunks=retrieved_chunks,
             model=model,
             usage=usage or {},
+            user_feedback=user_feedback,
         )
 
 
@@ -248,6 +251,216 @@ class TaskStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class QuestionStatus(str, Enum):
+    DISCOVERED = "discovered"
+    ANALYZING = "analyzing"
+    OPTIMIZING = "optimizing"
+    VERIFYING = "verifying"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class EffectRating(str, Enum):
+    BETTER = "better"
+    SAME = "same"
+    WORSE = "worse"
+
+
+class QuestionType(str, Enum):
+    FACTUAL = "factual"
+    EXPLANATORY = "explanatory"
+    OPERATIONAL = "operational"
+    COMPARATIVE = "comparative"
+
+
+class Severity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class Scope(str, Enum):
+    SINGLE_DOCUMENT = "single_document"
+    MULTI_DOCUMENT = "multi_document"
+    GLOBAL = "global"
+
+
+class RootCause(str, Enum):
+    CHUNK_TOO_SMALL = "chunk_too_small"
+    CHUNK_TOO_LARGE = "chunk_too_large"
+    BOUNDARY_ISSUE = "boundary_issue"
+    INCOMPLETE_CONTENT = "incomplete_content"
+    OTHER = "other"
+
+
+@dataclass
+class QuestionClassification:
+    type: QuestionType = QuestionType.FACTUAL
+    severity: Severity = Severity.LOW
+    scope: Scope = Scope.SINGLE_DOCUMENT
+    root_cause: RootCause = RootCause.OTHER
+    priority: int = 1
+
+
+@dataclass
+class UserFeedback:
+    rating: Optional[int] = None
+    comment: Optional[str] = None
+    is_helpful: Optional[bool] = None
+    is_resolved: Optional[bool] = None
+
+
+@dataclass
+class RetrievalParams:
+    top_k: int = 5
+    score_threshold: float = 0.5
+    retrieval_time: float = 0.0
+
+
+@dataclass
+class GenerationParams:
+    model: str = ""
+    temperature: float = 0.7
+    generation_time: float = 0.0
+
+
+@dataclass
+class RetrievedChunkInfo:
+    chunk_id: str
+    content: str
+    score: float
+    document_id: str
+
+
+@dataclass
+class StatusHistory:
+    status: str
+    timestamp: datetime
+    operator: str
+    comment: Optional[str] = None
+
+
+@dataclass
+class VerificationRecord:
+    verification_id: str = field(default_factory=lambda: str(uuid4()))
+    question_id: str = ""
+    test_plan_id: str = ""
+    original_answer: str = ""
+    new_answer: str = ""
+    original_chunks: List[RetrievedChunkInfo] = field(default_factory=list)
+    new_chunks: List[RetrievedChunkInfo] = field(default_factory=list)
+    similarity_score: float = 0.0
+    chunk_changes: Dict[str, int] = field(default_factory=dict)
+    score_changes: Dict[str, float] = field(default_factory=dict)
+    effect_rating: EffectRating = EffectRating.SAME
+    user_comment: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class DecisionRecord:
+    decision_id: str = field(default_factory=lambda: str(uuid4()))
+    test_plan_id: str = ""
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    decision: str = ""
+    reason: str = ""
+    operator: str = ""
+
+
+@dataclass
+class Question:
+    question_id: str = field(default_factory=lambda: str(uuid4()))
+    question: str = ""
+    answer: str = ""
+    retrieved_chunks: List[RetrievedChunkInfo] = field(default_factory=list)
+    retrieval_params: RetrievalParams = field(default_factory=RetrievalParams)
+    generation_params: GenerationParams = field(default_factory=GenerationParams)
+    classification: QuestionClassification = field(default_factory=QuestionClassification)
+    related_questions: List[str] = field(default_factory=list)
+    related_chunks: List[str] = field(default_factory=list)
+    status: QuestionStatus = QuestionStatus.DISCOVERED
+    status_history: List[StatusHistory] = field(default_factory=list)
+    user_feedback: UserFeedback = field(default_factory=UserFeedback)
+    is_optimization_target: bool = False
+    optimization_target_since: Optional[datetime] = None
+    verification_records: List[VerificationRecord] = field(default_factory=list)
+    decision_records: List[DecisionRecord] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class OptimizationOperation:
+    operation_type: str = ""
+    chunk_ids: List[str] = field(default_factory=list)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class OptimizationSummary:
+    operations: List[OptimizationOperation] = field(default_factory=list)
+    affected_documents: List[str] = field(default_factory=list)
+    affected_chunks: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ImpactAnalysis:
+    affected_questions: int = 0
+    improvement_rate: float = 0.0
+    regression_rate: float = 0.0
+
+
+@dataclass
+class RiskAssessment:
+    level: str = "low"
+    potential_issues: List[str] = field(default_factory=list)
+
+
+@dataclass
+class CostAssessment:
+    remaining_issues: int = 0
+    estimated_effort: str = "low"
+
+
+@dataclass
+class Decision:
+    recommendation: str = ""
+    reason: str = ""
+    impact_analysis: ImpactAnalysis = field(default_factory=ImpactAnalysis)
+    risk_assessment: RiskAssessment = field(default_factory=RiskAssessment)
+    cost_assessment: CostAssessment = field(default_factory=CostAssessment)
+    next_actions: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TestPlanResults:
+    total: int = 0
+    better: int = 0
+    same: int = 0
+    worse: int = 0
+    failed: int = 0
+
+
+@dataclass
+class TestPlan:
+    test_plan_id: str = field(default_factory=lambda: str(uuid4()))
+    name: str = ""
+    description: Optional[str] = None
+    version: int = 1
+    parent_plan_id: Optional[str] = None
+    question_ids: List[str] = field(default_factory=list)
+    optimization_summary: OptimizationSummary = field(default_factory=OptimizationSummary)
+    status: str = "draft"
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    results: TestPlanResults = field(default_factory=TestPlanResults)
+    decision: Decision = field(default_factory=Decision)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: str = ""
 
 
 @dataclass
@@ -276,7 +489,12 @@ class UploadTask:
             display_name=display_name,
         )
 
-    def update_status(self, status: TaskStatus, progress: int = 0, error_message: Optional[str] = None) -> None:
+    def update_status(
+        self,
+        status: TaskStatus,
+        progress: int = 0,
+        error_message: Optional[str] = None,
+    ) -> None:
         self.status = status
         self.progress = progress
         self.error_message = error_message

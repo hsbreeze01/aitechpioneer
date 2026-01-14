@@ -68,6 +68,8 @@ async function askQuestion() {
             }),
         });
         
+        currentRecordId = response.record_id || null;
+        
         answerContent.innerHTML = `
             <div class="answer-text">${escapeHtml(response.answer)}</div>
         `;
@@ -89,9 +91,70 @@ async function askQuestion() {
             `).join('');
         }
         
+        showFeedbackSection();
+        
     } catch (error) {
         console.error('提问失败:', error);
         answerContent.innerHTML = `<div class="error">提问失败: ${error.message}</div>`;
+    }
+}
+
+let currentRecordId = null;
+
+function showFeedbackSection() {
+    const feedbackSection = document.getElementById('feedbackSection');
+    feedbackSection.classList.remove('hidden');
+}
+
+function hideFeedbackSection() {
+    const feedbackSection = document.getElementById('feedbackSection');
+    feedbackSection.classList.add('hidden');
+}
+
+function showFeedbackForm() {
+    const feedbackForm = document.getElementById('feedbackForm');
+    const feedbackButtons = document.querySelector('.feedback-buttons');
+    feedbackForm.classList.remove('hidden');
+    feedbackButtons.classList.add('hidden');
+}
+
+function hideFeedbackForm() {
+    const feedbackForm = document.getElementById('feedbackForm');
+    const feedbackButtons = document.querySelector('.feedback-buttons');
+    feedbackForm.classList.add('hidden');
+    feedbackButtons.classList.remove('hidden');
+}
+
+async function submitFeedback() {
+    const rating = document.getElementById('feedbackRating').value;
+    const isResolved = document.getElementById('feedbackResolved').value === 'true';
+    const comment = document.getElementById('feedbackComment').value;
+    
+    if (!currentRecordId) {
+        alert('没有可提交反馈的记录');
+        return;
+    }
+    
+    try {
+        const response = await fetchAPI('/qa/feedback', {
+            method: 'POST',
+            body: JSON.stringify({
+                record_id: currentRecordId,
+                rating: parseInt(rating),
+                is_resolved: isResolved,
+                comment: comment || null,
+            }),
+        });
+        
+        if (response.success) {
+            alert('反馈提交成功！');
+            hideFeedbackSection();
+        } else {
+            alert('反馈提交失败: ' + response.message);
+        }
+    } catch (error) {
+        console.error('提交反馈失败:', error);
+        alert('提交反馈失败: ' + error.message);
     }
 }
 
@@ -300,10 +363,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearAnswerBtn = document.getElementById('clearAnswer');
     const questionInput = document.getElementById('questionInput');
     const loadQaRecordsBtn = document.getElementById('loadQaRecords');
+    const feedbackSatisfiedBtn = document.getElementById('feedbackSatisfied');
+    const feedbackUnsatisfiedBtn = document.getElementById('feedbackUnsatisfied');
+    const submitFeedbackBtn = document.getElementById('submitFeedback');
+    const cancelFeedbackBtn = document.getElementById('cancelFeedback');
     
     askBtn.addEventListener('click', askQuestion);
     clearAnswerBtn.addEventListener('click', clearAnswer);
     loadQaRecordsBtn.addEventListener('click', loadQaRecords);
+    
+    if (feedbackSatisfiedBtn) {
+        feedbackSatisfiedBtn.addEventListener('click', () => {
+            document.getElementById('feedbackRating').value = '5';
+            document.getElementById('feedbackResolved').value = 'true';
+            showFeedbackForm();
+        });
+    }
+    
+    if (feedbackUnsatisfiedBtn) {
+        feedbackUnsatisfiedBtn.addEventListener('click', () => {
+            document.getElementById('feedbackRating').value = '1';
+            document.getElementById('feedbackResolved').value = 'false';
+            showFeedbackForm();
+        });
+    }
+    
+    if (submitFeedbackBtn) {
+        submitFeedbackBtn.addEventListener('click', submitFeedback);
+    }
+    
+    if (cancelFeedbackBtn) {
+        cancelFeedbackBtn.addEventListener('click', () => {
+            hideFeedbackForm();
+        });
+    }
     
     questionInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {

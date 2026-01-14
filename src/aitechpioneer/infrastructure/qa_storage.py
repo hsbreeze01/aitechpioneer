@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..domain.models import QARetrievalRecord
+from ..domain.models import QARetrievalRecord, UserFeedback
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,16 @@ class QARetrievalStorage:
                 ],
                 "model": record.model,
                 "usage": record.usage,
+                "user_feedback": (
+                    {
+                        "rating": record.user_feedback.rating,
+                        "is_helpful": record.user_feedback.is_helpful,
+                        "is_resolved": record.user_feedback.is_resolved,
+                        "comment": record.user_feedback.comment,
+                    }
+                    if record.user_feedback
+                    else None
+                ),
                 "created_at": record.created_at.isoformat(),
             }
 
@@ -81,6 +91,16 @@ class QARetrievalStorage:
                 retrieved_chunks=retrieved_chunks,
                 model=record_data["model"],
                 usage=record_data["usage"],
+                user_feedback=(
+                    UserFeedback(
+                        rating=record_data.get("user_feedback", {}).get("rating"),
+                        is_helpful=record_data.get("user_feedback", {}).get("is_helpful"),
+                        is_resolved=record_data.get("user_feedback", {}).get("is_resolved"),
+                        comment=record_data.get("user_feedback", {}).get("comment"),
+                    )
+                    if record_data.get("user_feedback")
+                    else None
+                ),
                 created_at=datetime.fromisoformat(record_data["created_at"]),
             )
 
@@ -185,6 +205,39 @@ class QARetrievalStorage:
                 "top_chunks": [],
                 "top_documents": [],
             }
+
+    def add_feedback(
+        self,
+        record_id: str,
+        feedback: UserFeedback,
+    ) -> bool:
+        try:
+            record = self.get_record(record_id)
+            if not record:
+                logger.error(f"Record {record_id} not found")
+                return False
+
+            record.user_feedback = feedback
+            self.save_record(record)
+            logger.info(f"Feedback added for record {record_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add feedback: {e}")
+            return False
+
+    def get_unsatisfied_records(self) -> List[QARetrievalRecord]:
+        try:
+            all_records = self.get_all_records()
+            unsatisfied_records = [
+                record
+                for record in all_records
+                if record.user_feedback
+                and record.user_feedback.is_resolved is False
+            ]
+            return unsatisfied_records
+        except Exception as e:
+            logger.error(f"Failed to get unsatisfied records: {e}")
+            return []
 
 
 qa_retrieval_storage = QARetrievalStorage()

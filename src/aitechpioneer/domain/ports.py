@@ -2,7 +2,16 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from aitechpioneer.domain.models import Chunk, ChunkStatus, ChunkVersion, ChunkMergeRecord
+from aitechpioneer.domain.models import (
+    Chunk,
+    ChunkMergeRecord,
+    ChunkStatus,
+    ChunkVersion,
+    Question,
+    QuestionStatus,
+    TestPlan,
+    VerificationRecord,
+)
 
 
 class VectorDatabasePort(ABC):
@@ -58,6 +67,16 @@ class VectorDatabasePort(ABC):
         pass
 
     @abstractmethod
+    async def get_adjacent_chunks(
+        self,
+        collection_name: str,
+        chunk_id: UUID,
+        similarity_threshold: float = 0.3,
+        max_adjacent: int = 5,
+    ) -> Dict[str, Optional[Chunk]]:
+        pass
+
+    @abstractmethod
     async def insert_chunk_version(self, collection_name: str, version: ChunkVersion) -> None:
         pass
 
@@ -70,7 +89,11 @@ class VectorDatabasePort(ABC):
         pass
 
     @abstractmethod
-    async def get_merge_record(self, collection_name: str, record_id: UUID) -> Optional[ChunkMergeRecord]:
+    async def get_merge_record(
+        self,
+        collection_name: str,
+        record_id: UUID,
+    ) -> Optional[ChunkMergeRecord]:
         pass
 
     @abstractmethod
@@ -114,3 +137,102 @@ class LLMServicePort(ABC):
         conversation_history: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         pass
+
+
+class QuestionRepository(ABC):
+    @abstractmethod
+    async def create(self, question: Question) -> Question:
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, question_id: str) -> Optional[Question]:
+        pass
+
+    @abstractmethod
+    async def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[QuestionStatus] = None,
+        is_optimization_target: Optional[bool] = None,
+    ) -> List[Question]:
+        pass
+
+    @abstractmethod
+    async def update(self, question: Question) -> Question:
+        pass
+
+    @abstractmethod
+    async def delete(self, question_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    async def search(
+        self,
+        query: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[Question]:
+        pass
+
+
+class VerificationRepository(ABC):
+    @abstractmethod
+    async def create(self, verification: VerificationRecord) -> VerificationRecord:
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, verification_id: str) -> Optional[VerificationRecord]:
+        pass
+
+    @abstractmethod
+    async def get_by_question_id(self, question_id: str) -> List[VerificationRecord]:
+        pass
+
+    @abstractmethod
+    async def get_by_test_plan_id(self, test_plan_id: str) -> List[VerificationRecord]:
+        pass
+
+    @abstractmethod
+    async def update(self, verification: VerificationRecord) -> VerificationRecord:
+        pass
+
+    @abstractmethod
+    async def delete(self, verification_id: str) -> bool:
+        pass
+
+
+class TestPlanRepository(ABC):
+    @abstractmethod
+    async def create(self, test_plan: TestPlan) -> TestPlan:
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, test_plan_id: str) -> Optional[TestPlan]:
+        pass
+
+    @abstractmethod
+    async def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+    ) -> List[TestPlan]:
+        pass
+
+    @abstractmethod
+    async def update(self, test_plan: TestPlan) -> TestPlan:
+        pass
+
+    @abstractmethod
+    async def delete(self, test_plan_id: str) -> bool:
+        pass
+
+    @abstractmethod
+    async def get_by_version(self, parent_plan_id: str, version: int) -> Optional[TestPlan]:
+        pass
+
+    @abstractmethod
+    async def get_versions(self, parent_plan_id: str) -> List[TestPlan]:
+        pass
+

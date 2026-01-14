@@ -2,11 +2,10 @@ import logging
 from pathlib import Path
 from typing import Callable, Dict, Tuple
 
-from docx import Document as DocxDocument
-from pypdf import PdfReader
-from pdf2image import convert_from_path
 import pytesseract
-from PIL import Image
+from docx import Document as DocxDocument
+from pdf2image import convert_from_path
+from pypdf import PdfReader
 
 from ..domain.models import DocumentMetadata, FileType
 
@@ -70,7 +69,10 @@ class DocumentParser:
                     metadata.author = str(author) if author else None
 
             if not content or len(content.strip()) < 10:
-                logger.warning(f"PDF contains little or no extractable text, attempting OCR: {path}")
+                logger.warning(
+                    f"PDF contains little or no extractable text, "
+                    f"attempting OCR: {path}"
+                )
                 try:
                     images = convert_from_path(str(path))
                     ocr_text = []
@@ -79,17 +81,24 @@ class DocumentParser:
                         if text.strip():
                             ocr_text.append(text)
                         logger.info(f"OCR processed page {i+1}/{len(images)}")
-                    
+
                     if ocr_text:
                         content = "\n\n".join(ocr_text)
                         metadata.word_count = len(content.split()) if content else 0
-                        logger.info(f"OCR extracted {len(content)} characters from {len(images)} pages")
+                        logger.info(
+                            f"OCR extracted {len(content)} characters "
+                            f"from {len(images)} pages"
+                        )
                     else:
                         logger.warning(f"OCR failed to extract text from {path}")
                 except Exception as ocr_error:
                     logger.error(f"OCR failed for {path}: {ocr_error}")
                     if not content:
-                        raise ValueError(f"Unable to extract text from PDF {path}. The PDF may be a scanned document without extractable text.")
+                        raise ValueError(
+                            "Unable to extract text from PDF {path}. "
+                            "The PDF may be a scanned document "
+                            "without extractable text."
+                        )
 
             return content, metadata
 
