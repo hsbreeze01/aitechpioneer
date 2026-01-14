@@ -26,9 +26,10 @@ wheels/
 .vscode/
 .trae/
 models/
-test_document.txt
-test_rag.py
+data/
+test_*.py
+test_*.txt
+test_*.log
 repomix-output.xml
 analyze_chunks_simple.py
 analyze_chunks.py
-data/
