@@ -43,6 +43,11 @@ aitechpioneer/
 │       │   └── cli.py
 │       └── settings.py      # 配置管理
 │
+├── tests/                   # 测试文件
+│   ├── README.md           # 测试文档
+│   ├── test_chunk_merge_cases.md    # Chunk 合并测试用例
+│   └── test_chunk_merge_playwright.py  # Chunk 合并 Playwright 测试
+│
 ├── scripts/                 # 工具脚本
 │   ├── validate_spec.py     # Spec 验证脚本
 │   └── validate_structure.py # 结构验证脚本
@@ -242,6 +247,27 @@ python scripts/validate_structure.py
 
 ## Testing Strategy
 
+### Test Directory Structure (`tests/`)
+测试文件应按照模块和功能组织在 `tests/` 目录下：
+
+```
+tests/
+├── README.md                    # 测试文档和运行指南
+├── test_{module}_cases.md       # 模块测试用例文档
+└── test_{module}_playwright.py  # 模块 Playwright 自动化测试
+```
+
+**Rules**：
+- 测试文件命名：`test_{module}_cases.md` 和 `test_{module}_playwright.py`
+- 每个模块的测试文件应集中在一起
+- 测试用例文档应包含完整的测试步骤和预期结果
+- Playwright 测试应使用异步编程模式
+- 测试文件应包含详细的 README 说明如何运行测试
+
+**Forbidden**：
+- 禁止在工程根目录创建 `test_*.py`、`test_*.txt`、`test_*.log` 等临时测试文件
+- 临时测试文件应被 `.gitignore` 忽略
+
 ### Unit Tests
 - 测试 domain 层的业务逻辑
 - 使用 mock 隔离依赖
@@ -251,6 +277,12 @@ python scripts/validate_structure.py
 - 测试跨层交互
 - 测试用例编排
 - 测试基础设施集成
+
+### E2E Tests
+- 使用 Playwright 进行端到端测试
+- 测试用户界面交互
+- 验证完整的用户流程
+- 测试文件应放置在 `tests/` 目录下
 
 ### Validation Tests
 - 运行 validate_spec.py
