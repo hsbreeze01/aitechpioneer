@@ -2,10 +2,12 @@ import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from aitechpioneer.application.use_cases import (
@@ -193,6 +195,47 @@ class SemanticResegmentResponse(BaseModel):
     message: str
     chunks_created: int
     chunks_deactivated: int
+
+
+class ChunkVersionInfo(BaseModel):
+    version_id: str
+    version: int
+    content: str
+    status: str
+    quality: str
+    created_at: str
+    created_by: str
+
+
+class ChunkMergeRecordInfo(BaseModel):
+    record_id: str
+    merge_type: str
+    source_chunk_ids: List[str]
+    target_chunk_id: str
+    created_at: str
+    is_reversible: bool
+
+
+class ChunkHistoryResponse(BaseModel):
+    chunk_id: str
+    current_status: str
+    current_version: int
+    is_latest_version: bool
+    versions: List[ChunkVersionInfo]
+    merge_records: List[ChunkMergeRecordInfo]
+    created_at: str
+    updated_at: str
+
+
+class MergeHistoryResponse(BaseModel):
+    records: List[ChunkMergeRecordInfo]
+    total: int
+
+
+class ChunkVersionsResponse(BaseModel):
+    chunk_id: str
+    versions: List[ChunkVersionInfo]
+    total: int
 
 
 class QARetrievalRecordInfo(BaseModel):
@@ -742,37 +785,65 @@ async def test_background(background_tasks: BackgroundTasks):
     response_model=ChunkListResponse,
     responses={500: {"model": ErrorResponse}},
 )
-async def get_all_chunks(collection_name: str = "documents"):
+async def get_all_chunks(collection_name: str = "documents", chunk_id: Optional[str] = None):
     try:
         _, chunk_manager_use_case, _, _ = get_use_cases()
 
-        chunks = await chunk_manager_use_case.vector_database.get_all_chunks(collection_name)
+        if chunk_id:
+            chunk_uuid = UUID(chunk_id)
+            chunk = await chunk_manager_use_case.vector_database.get_chunk_by_id(collection_name, chunk_uuid)
+            
+            if not chunk:
+                raise HTTPException(status_code=404, detail=f"Chunk with ID {chunk_id} not found")
+            
+            chunk_infos = [
+                ChunkInfo(
+                    chunk_id=str(chunk.chunk_id),
+                    document_id=chunk.document_id,
+                    content=chunk.content,
+                    chunk_type=chunk.chunk_type.value,
+                    status=chunk.status.value,
+                    quality=chunk.quality.value,
+                    version=chunk.version,
+                    start_index=chunk.start_char,
+                    end_index=chunk.end_char,
+                    derived_from=chunk.derived_from,
+                    merged_from=chunk.merged_from,
+                )
+            ]
+        else:
+            chunks = await chunk_manager_use_case.vector_database.get_all_chunks(collection_name)
 
-        chunk_infos = [
-            ChunkInfo(
-                chunk_id=str(chunk.chunk_id),
-                document_id=chunk.document_id,
-                content=chunk.content,
-                chunk_type=chunk.chunk_type.value,
-                status=chunk.status.value,
-                quality=chunk.quality.value,
-                version=chunk.version,
-                start_index=chunk.start_char,
-                end_index=chunk.end_char,
-                derived_from=chunk.derived_from,
-                merged_from=chunk.merged_from,
-            )
-            for chunk in chunks
-        ]
+            chunk_infos = [
+                ChunkInfo(
+                    chunk_id=str(chunk.chunk_id),
+                    document_id=chunk.document_id,
+                    content=chunk.content,
+                    chunk_type=chunk.chunk_type.value,
+                    status=chunk.status.value,
+                    quality=chunk.quality.value,
+                    version=chunk.version,
+                    start_index=chunk.start_char,
+                    end_index=chunk.end_char,
+                    derived_from=chunk.derived_from,
+                    merged_from=chunk.merged_from,
+                )
+                for chunk in chunks
+            ]
 
         return ChunkListResponse(
             document_id="all",
             chunks=chunk_infos,
-            total=len(chunks),
+            total=len(chunk_infos),
         )
 
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"Invalid chunk_id format: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid chunk_id format: {str(e)}")
     except Exception as e:
-        logger.error(f"Error getting all chunks: {e}")
+        logger.error(f"Error getting chunks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1167,6 +1238,153 @@ async def semantic_resegment_document(
 
 
 @app.get(
+    "/api/chunks/{chunk_id}/history",
+    response_model=ChunkHistoryResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_chunk_history(
+    chunk_id: str,
+    collection_name: str = "documents",
+):
+    try:
+        logger.info(f"API: Getting chunk history for chunk_id={chunk_id}, collection_name={collection_name}")
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        history = await chunk_manager_use_case.get_chunk_history(
+            chunk_id=chunk_id,
+            collection_name=collection_name,
+        )
+
+        versions = [
+            ChunkVersionInfo(
+                version_id=v["version_id"],
+                version=v["version"],
+                content=v["content"],
+                status=v["status"],
+                quality=v["quality"],
+                created_at=v["created_at"],
+                created_by=v["created_by"],
+            )
+            for v in history["versions"]
+        ]
+
+        merge_records = [
+            ChunkMergeRecordInfo(
+                record_id=r["record_id"],
+                merge_type=r["merge_type"],
+                source_chunk_ids=r["source_chunk_ids"],
+                target_chunk_id=r["target_chunk_id"],
+                created_at=r["created_at"],
+                is_reversible=r["is_reversible"],
+            )
+            for r in history["merge_records"]
+        ]
+
+        return ChunkHistoryResponse(
+            chunk_id=history["chunk_id"],
+            current_status=history["current_status"],
+            current_version=history["current_version"],
+            is_latest_version=history["is_latest_version"],
+            versions=versions,
+            merge_records=merge_records,
+            created_at=history["created_at"],
+            updated_at=history["updated_at"],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chunk history: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/merge-history",
+    response_model=MergeHistoryResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+async def get_merge_history(
+    document_id: Optional[str] = None,
+    chunk_id: Optional[str] = None,
+    limit: int = 100,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        history = await chunk_manager_use_case.get_merge_history(
+            collection_name=collection_name,
+            document_id=document_id,
+            chunk_id=chunk_id,
+            limit=limit,
+        )
+
+        records = [
+            ChunkMergeRecordInfo(
+                record_id=r["record_id"],
+                merge_type=r["merge_type"],
+                source_chunk_ids=r["source_chunk_ids"],
+                target_chunk_id=r["target_chunk_id"],
+                created_at=r["created_at"],
+                is_reversible=r["is_reversible"],
+            )
+            for r in history
+        ]
+
+        return MergeHistoryResponse(
+            records=records,
+            total=len(records),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting merge history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
+    "/api/chunks/{chunk_id}/versions",
+    response_model=ChunkVersionsResponse,
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+)
+async def get_chunk_versions(
+    chunk_id: str,
+    collection_name: str = "documents",
+):
+    try:
+        _, chunk_manager_use_case, _, _ = get_use_cases()
+
+        history = await chunk_manager_use_case.get_chunk_history(
+            chunk_id=chunk_id,
+            collection_name=collection_name,
+        )
+
+        versions = [
+            ChunkVersionInfo(
+                version_id=v["version_id"],
+                version=v["version"],
+                content=v["content"],
+                status=v["status"],
+                quality=v["quality"],
+                created_at=v["created_at"],
+                created_by=v["created_by"],
+            )
+            for v in history["versions"]
+        ]
+
+        return ChunkVersionsResponse(
+            chunk_id=history["chunk_id"],
+            versions=versions,
+            total=len(versions),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chunk versions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get(
     "/api/qa/records",
     response_model=QARetrievalListResponse,
     responses={500: {"model": ErrorResponse}},
@@ -1373,6 +1591,14 @@ async def create_invalid_task():
     except Exception as e:
         logger.error(f"Error creating invalid task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+if os.path.exists(frontend_dir):
+    app.mount(
+        "/",
+        StaticFiles(directory=frontend_dir, html=True),
+        name="frontend",
+    )
 
 
 if __name__ == "__main__":

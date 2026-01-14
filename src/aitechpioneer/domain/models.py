@@ -79,6 +79,8 @@ class ChunkStatus(str, Enum):
     ACTIVE = "active"
     DEPRECATED = "deprecated"
     INACTIVE = "inactive"
+    MERGED = "merged"
+    SPLIT = "split"
 
 
 class ChunkQuality(str, Enum):
@@ -125,6 +127,9 @@ class Chunk:
     updated_at: datetime = field(default_factory=datetime.utcnow)
     merged_from: Optional[List[Dict[str, Any]]] = None
     derived_from: Optional[List[str]] = None
+    previous_version_id: Optional[UUID] = None
+    is_latest_version: bool = True
+    merge_record_id: Optional[UUID] = None
 
     @classmethod
     def create(
@@ -181,6 +186,32 @@ class RetrievedChunk:
     chunk_index: int
     start_char: int
     end_char: int
+
+
+@dataclass
+class ChunkVersion:
+    version_id: UUID = field(default_factory=uuid4)
+    chunk_id: UUID = field(default_factory=uuid4)
+    version: int = 1
+    content: str = ""
+    embedding: List[float] = field(default_factory=list)
+    status: ChunkStatus = ChunkStatus.ACTIVE
+    quality: ChunkQuality = ChunkQuality.HIGH
+    metadata: Optional[ChunkMetadata] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: str = "system"
+
+
+@dataclass
+class ChunkMergeRecord:
+    record_id: UUID = field(default_factory=uuid4)
+    merge_type: str = ""
+    source_chunk_ids: List[UUID] = field(default_factory=list)
+    target_chunk_id: UUID = field(default_factory=uuid4)
+    previous_state: Dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: str = "system"
+    is_reversible: bool = True
 
 
 @dataclass

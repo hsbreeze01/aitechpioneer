@@ -6,9 +6,11 @@ from uuid import UUID
 from aitechpioneer.domain.models import (
     Chunk,
     ChunkMetadata,
+    ChunkMergeRecord,
     ChunkQuality,
     ChunkStatus,
     ChunkType,
+    ChunkVersion,
     Document,
     DocumentStatus,
     FileType,
@@ -195,11 +197,56 @@ class ChunkManagerUseCase:
             if not chunk1 or not chunk2:
                 raise ValueError("One or both chunks not found")
 
+            if chunk1.status != ChunkStatus.ACTIVE or chunk2.status != ChunkStatus.ACTIVE:
+                raise ValueError("Can only merge active chunks")
+
             if chunk1.version != chunk2.version:
                 raise ValueError("Cannot merge chunks with different versions")
 
             merged_content = f"{chunk1.content}\n\n{chunk2.content}"
+            logger.info(f"Generating embedding for merged content (length: {len(merged_content)})")
             merged_embedding = await self.embedding_service.generate_embedding(merged_content)
+            logger.info(f"Generated embedding with dimension: {len(merged_embedding)}")
+
+            version1 = ChunkVersion(
+                chunk_id=chunk1.chunk_id,
+                version=chunk1.version,
+                content=chunk1.content,
+                embedding=chunk1.embedding,
+                status=chunk1.status,
+                quality=chunk1.quality,
+                metadata=chunk1.metadata,
+                created_at=chunk1.created_at,
+                created_by="system",
+            )
+
+            version2 = ChunkVersion(
+                chunk_id=chunk2.chunk_id,
+                version=chunk2.version,
+                content=chunk2.content,
+                embedding=chunk2.embedding,
+                status=chunk2.status,
+                quality=chunk2.quality,
+                metadata=chunk2.metadata,
+                created_at=chunk2.created_at,
+                created_by="system",
+            )
+
+            await self.vector_database.insert_chunk_version(collection_name, version1)
+            await self.vector_database.insert_chunk_version(collection_name, version2)
+
+            chunk1.status = ChunkStatus.MERGED
+            chunk1.inactive_reason = f"Merged with chunk {chunk2.chunk_id}"
+            chunk1.is_latest_version = False
+            chunk1.updated_at = datetime.utcnow()
+
+            chunk2.status = ChunkStatus.MERGED
+            chunk2.inactive_reason = f"Merged with chunk {chunk1.chunk_id}"
+            chunk2.is_latest_version = False
+            chunk2.updated_at = datetime.utcnow()
+
+            await self.vector_database.update_chunk(collection_name, chunk1)
+            await self.vector_database.update_chunk(collection_name, chunk2)
 
             merged_chunk = Chunk(
                 document_id=chunk1.document_id,
@@ -214,48 +261,50 @@ class ChunkManagerUseCase:
                 merged_from=[
                     {
                         "chunk_id": str(chunk1.chunk_id),
-                        "document_id": chunk1.document_id,
-                        "parent_chunk_id": chunk1.parent_chunk_id,
                         "content": chunk1.content,
                         "status": chunk1.status.value,
-                        "inactive_reason": chunk1.inactive_reason,
-                        "quality": chunk1.quality.value,
                         "version": chunk1.version,
-                        "chunk_type": chunk1.chunk_type.value,
-                        "chunk_index": chunk1.chunk_index,
-                        "start_char": chunk1.start_char,
-                        "end_char": chunk1.end_char,
-                        "embedding": chunk1.embedding,
-                        "metadata": chunk1.metadata.__dict__ if chunk1.metadata else None,
-                        "created_at": chunk1.created_at.isoformat(),
-                        "updated_at": chunk1.updated_at.isoformat(),
                     },
                     {
                         "chunk_id": str(chunk2.chunk_id),
-                        "document_id": chunk2.document_id,
-                        "parent_chunk_id": chunk2.parent_chunk_id,
                         "content": chunk2.content,
                         "status": chunk2.status.value,
-                        "inactive_reason": chunk2.inactive_reason,
-                        "quality": chunk2.quality.value,
                         "version": chunk2.version,
-                        "chunk_type": chunk2.chunk_type.value,
-                        "chunk_index": chunk2.chunk_index,
-                        "start_char": chunk2.start_char,
-                        "end_char": chunk2.end_char,
-                        "embedding": chunk2.embedding,
-                        "metadata": chunk2.metadata.__dict__ if chunk2.metadata else None,
-                        "created_at": chunk2.created_at.isoformat(),
-                        "updated_at": chunk2.updated_at.isoformat(),
                     },
                 ],
+                previous_version_id=None,
+                is_latest_version=True,
             )
             merged_chunk.update_embedding(merged_embedding)
 
             await self.vector_database.insert_chunks(collection_name, [merged_chunk])
 
-            await self.vector_database.delete_chunk(collection_name, UUID(chunk_id_1))
-            await self.vector_database.delete_chunk(collection_name, UUID(chunk_id_2))
+            merge_record = ChunkMergeRecord(
+                merge_type="merge",
+                source_chunk_ids=[chunk1.chunk_id, chunk2.chunk_id],
+                target_chunk_id=merged_chunk.chunk_id,
+                previous_state={
+                    "chunk1": {
+                        "chunk_id": str(chunk1.chunk_id),
+                        "content": chunk1.content,
+                        "status": chunk1.status.value,
+                        "version": chunk1.version,
+                    },
+                    "chunk2": {
+                        "chunk_id": str(chunk2.chunk_id),
+                        "content": chunk2.content,
+                        "status": chunk2.status.value,
+                        "version": chunk2.version,
+                    },
+                },
+                created_by="system",
+                is_reversible=True,
+            )
+
+            await self.vector_database.insert_merge_record(collection_name, merge_record)
+
+            merged_chunk.merge_record_id = merge_record.record_id
+            await self.vector_database.update_chunk(collection_name, merged_chunk)
 
             logger.info(f"Chunks merged successfully: {merged_chunk.chunk_id}")
             return merged_chunk
@@ -278,35 +327,64 @@ class ChunkManagerUseCase:
             if not merged_chunk:
                 raise ValueError(f"Merged chunk {merged_chunk_id} not found")
 
-            if not merged_chunk.merged_from or len(merged_chunk.merged_from) != 2:
-                raise ValueError("This chunk was not created from merging two chunks")
+            if merged_chunk.status != ChunkStatus.ACTIVE:
+                raise ValueError("Can only undo merge on active chunks")
+
+            if not merged_chunk.merge_record_id:
+                raise ValueError("This chunk does not have a merge record")
+
+            merge_record = await self.vector_database.get_merge_record(
+                collection_name, merged_chunk.merge_record_id
+            )
+            if not merge_record:
+                raise ValueError(f"Merge record {merged_chunk.merge_record_id} not found")
+
+            if not merge_record.is_reversible:
+                raise ValueError("This merge operation cannot be undone")
 
             restored_chunks = []
-            for chunk_data in merged_chunk.merged_from:
-                restored_chunk = Chunk(
-                    chunk_id=UUID(chunk_data["chunk_id"]),
-                    document_id=chunk_data["document_id"],
-                    parent_chunk_id=chunk_data["parent_chunk_id"],
-                    content=chunk_data["content"],
-                    status=ChunkStatus(chunk_data["status"]),
-                    inactive_reason=chunk_data["inactive_reason"],
-                    quality=ChunkQuality(chunk_data["quality"]),
-                    version=chunk_data["version"],
-                    chunk_type=ChunkType(chunk_data["chunk_type"]),
-                    chunk_index=chunk_data["chunk_index"],
-                    start_char=chunk_data["start_char"],
-                    end_char=chunk_data["end_char"],
-                    embedding=chunk_data["embedding"],
-                    metadata=(
-                        ChunkMetadata(**chunk_data["metadata"]) if chunk_data["metadata"] else None
-                    ),
-                    created_at=datetime.fromisoformat(chunk_data["created_at"]),
-                    updated_at=datetime.fromisoformat(chunk_data["updated_at"]),
+            for source_chunk_id in merge_record.source_chunk_ids:
+                source_chunk = await self.vector_database.get_chunk_by_id(
+                    collection_name, source_chunk_id
                 )
-                restored_chunks.append(restored_chunk)
+                if not source_chunk:
+                    raise ValueError(f"Source chunk {source_chunk_id} not found")
 
-            await self.vector_database.insert_chunks(collection_name, restored_chunks)
-            await self.vector_database.delete_chunk(collection_name, UUID(merged_chunk_id))
+                if source_chunk.status != ChunkStatus.MERGED:
+                    raise ValueError(f"Source chunk {source_chunk_id} is not in MERGED status")
+
+                source_chunk.status = ChunkStatus.ACTIVE
+                source_chunk.inactive_reason = None
+                source_chunk.is_latest_version = True
+                source_chunk.updated_at = datetime.utcnow()
+
+                await self.vector_database.update_chunk(collection_name, source_chunk)
+                restored_chunks.append(source_chunk)
+
+            merged_chunk.status = ChunkStatus.INACTIVE
+            merged_chunk.inactive_reason = "Merge undone"
+            merged_chunk.is_latest_version = False
+            merged_chunk.updated_at = datetime.utcnow()
+
+            await self.vector_database.update_chunk(collection_name, merged_chunk)
+
+            undo_record = ChunkMergeRecord(
+                merge_type="undo_merge",
+                source_chunk_ids=[merged_chunk.chunk_id],
+                target_chunk_id=restored_chunks[0].chunk_id,
+                previous_state={
+                    "merged_chunk": {
+                        "chunk_id": str(merged_chunk.chunk_id),
+                        "content": merged_chunk.content,
+                        "status": merged_chunk.status.value,
+                    },
+                    "original_merge_record_id": str(merge_record.record_id),
+                },
+                created_by="system",
+                is_reversible=False,
+            )
+
+            await self.vector_database.insert_merge_record(collection_name, undo_record)
 
             logger.info(
                 f"Merge undone successfully: {merged_chunk_id}, "
@@ -588,6 +666,103 @@ class ChunkManagerUseCase:
 
         except Exception as e:
             logger.error(f"Error during semantic resegmentation: {e}")
+            raise
+
+    async def get_chunk_history(
+        self,
+        chunk_id: str,
+        collection_name: str = "documents",
+    ) -> Dict[str, Any]:
+        logger.info(f"Getting chunk history: {chunk_id}")
+
+        try:
+            chunk = await self.vector_database.get_chunk_by_id(collection_name, UUID(chunk_id))
+            if not chunk:
+                logger.error(f"Chunk {chunk_id} not found")
+                raise ValueError(f"Chunk {chunk_id} not found")
+
+            logger.info(f"Retrieving versions for chunk {chunk.chunk_id}")
+            versions = await self.vector_database.get_chunk_versions(collection_name, chunk.chunk_id)
+            logger.info(f"Found {len(versions)} versions for chunk {chunk.chunk_id}")
+
+            logger.info(f"Retrieving merge records for chunk {chunk.chunk_id}")
+            merge_records = await self.vector_database.get_merge_records(
+                collection_name, chunk_id=chunk.chunk_id, limit=10
+            )
+            logger.info(f"Found {len(merge_records)} merge records for chunk {chunk.chunk_id}")
+
+            history = {
+                "chunk_id": str(chunk.chunk_id),
+                "current_status": chunk.status.value,
+                "current_version": chunk.version,
+                "is_latest_version": chunk.is_latest_version,
+                "versions": [
+                    {
+                        "version_id": str(v.version_id),
+                        "version": v.version,
+                        "content": v.content,
+                        "status": v.status.value,
+                        "quality": v.quality.value,
+                        "created_at": v.created_at.isoformat(),
+                        "created_by": v.created_by,
+                    }
+                    for v in versions
+                ],
+                "merge_records": [
+                    {
+                        "record_id": str(r.record_id),
+                        "merge_type": r.merge_type,
+                        "source_chunk_ids": [str(id) for id in r.source_chunk_ids],
+                        "target_chunk_id": str(r.target_chunk_id),
+                        "created_at": r.created_at.isoformat(),
+                        "is_reversible": r.is_reversible,
+                    }
+                    for r in merge_records
+                ],
+                "created_at": chunk.created_at.isoformat(),
+                "updated_at": chunk.updated_at.isoformat(),
+            }
+
+            logger.info(f"Retrieved chunk history for {chunk_id}")
+            return history
+
+        except Exception as e:
+            logger.error(f"Error getting chunk history: {str(e)}", exc_info=True)
+            raise
+
+    async def get_merge_history(
+        self,
+        collection_name: str = "documents",
+        document_id: Optional[str] = None,
+        chunk_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        logger.info(f"Getting merge history (document_id={document_id}, chunk_id={chunk_id})")
+
+        try:
+            chunk_uuid = UUID(chunk_id) if chunk_id else None
+            merge_records = await self.vector_database.get_merge_records(
+                collection_name, document_id=document_id, chunk_id=chunk_uuid, limit=limit
+            )
+
+            history = [
+                {
+                    "record_id": str(r.record_id),
+                    "merge_type": r.merge_type,
+                    "source_chunk_ids": [str(id) for id in r.source_chunk_ids],
+                    "target_chunk_id": str(r.target_chunk_id),
+                    "created_at": r.created_at.isoformat(),
+                    "created_by": r.created_by,
+                    "is_reversible": r.is_reversible,
+                }
+                for r in merge_records
+            ]
+
+            logger.info(f"Retrieved {len(history)} merge records")
+            return history
+
+        except Exception as e:
+            logger.error(f"Error getting merge history: {e}")
             raise
 
 

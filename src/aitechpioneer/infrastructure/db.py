@@ -9,12 +9,13 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PointStruct,
     VectorParams,
 )
 
-from ..domain.models import Chunk, ChunkMetadata, ChunkQuality, ChunkStatus, ChunkType, FileType
+from ..domain.models import Chunk, ChunkMetadata, ChunkMergeRecord, ChunkQuality, ChunkStatus, ChunkType, ChunkVersion, FileType
 from ..domain.ports import VectorDatabasePort
 from ..settings import settings
 
@@ -53,7 +54,7 @@ class QdrantDatabase(VectorDatabasePort):
             return False
 
     def _chunk_to_payload(self, chunk: Chunk) -> Dict[str, Any]:
-        return {
+        payload = {
             "chunk_id": str(chunk.chunk_id),
             "document_id": chunk.document_id,
             "parent_chunk_id": chunk.parent_chunk_id,
@@ -70,6 +71,7 @@ class QdrantDatabase(VectorDatabasePort):
             "updated_at": chunk.updated_at.isoformat(),
             "merged_from": chunk.merged_from,
             "derived_from": chunk.derived_from,
+            "merge_record_id": str(chunk.merge_record_id) if chunk.merge_record_id else None,
             "metadata": (
                 {
                     "source_file": chunk.metadata.source_file if chunk.metadata else "",
@@ -85,6 +87,8 @@ class QdrantDatabase(VectorDatabasePort):
                 else {}
             ),
         }
+        logger.debug(f"Generated payload for chunk {chunk.chunk_id}: content_length={len(chunk.content) if chunk.content else 0}, merged_from={chunk.merged_from}, derived_from={chunk.derived_from}, merge_record_id={chunk.merge_record_id}")
+        return payload
 
     def _payload_to_chunk(self, payload: Dict[str, Any], point_id: UUID) -> Chunk:
         metadata_dict = payload.get("metadata", {})
@@ -126,6 +130,7 @@ class QdrantDatabase(VectorDatabasePort):
             metadata=metadata,
             merged_from=payload.get("merged_from"),
             derived_from=payload.get("derived_from"),
+            merge_record_id=UUID(payload.get("merge_record_id")) if payload.get("merge_record_id") else None,
         )
 
     async def insert_chunks(self, collection_name: str, chunks: List[Chunk]) -> None:
@@ -141,6 +146,7 @@ class QdrantDatabase(VectorDatabasePort):
                 for chunk in batch:
                     payload = self._chunk_to_payload(chunk)
                     logger.debug(f"Preparing chunk {chunk.chunk_id} for insertion: document_id={chunk.document_id}, content_preview={chunk.content[:50] if chunk.content else 'N/A'}")
+                    logger.debug(f"Payload details for chunk {chunk.chunk_id}: status={payload.get('status')}, merged_from={payload.get('merged_from')}, derived_from={payload.get('derived_from')}, content_length={len(payload.get('content', ''))}")
                     point = PointStruct(
                         id=chunk.chunk_id,
                         vector=chunk.embedding,
@@ -148,10 +154,11 @@ class QdrantDatabase(VectorDatabasePort):
                     )
                     points.append(point)
 
-                self.client.upsert(
+                upsert_result = self.client.upsert(
                     collection_name=collection_name,
                     points=points,
                 )
+                logger.debug(f"Upsert result for batch {i//batch_size + 1}: {upsert_result}")
                 total_inserted += len(batch)
                 logger.info(f"Inserted batch {total_inserted}/{len(chunks)} chunks into '{collection_name}'")
 
@@ -211,15 +218,16 @@ class QdrantDatabase(VectorDatabasePort):
 
     async def update_chunk(self, collection_name: str, chunk: Chunk) -> None:
         try:
-            self.client.set_payload(
-                collection_name=collection_name,
-                payload=self._chunk_to_payload(chunk),
-                points=[chunk.chunk_id],
-            )
             if chunk.embedding:
                 self.client.upsert(
                     collection_name=collection_name,
-                    points=[PointStruct(id=chunk.chunk_id, vector=chunk.embedding)],
+                    points=[PointStruct(id=chunk.chunk_id, vector=chunk.embedding, payload=self._chunk_to_payload(chunk))],
+                )
+            else:
+                self.client.set_payload(
+                    collection_name=collection_name,
+                    payload=self._chunk_to_payload(chunk),
+                    points=[chunk.chunk_id],
                 )
             logger.info(f"Updated chunk '{chunk.chunk_id}' in '{collection_name}'")
         except Exception as e:
@@ -381,6 +389,14 @@ class QdrantDatabase(VectorDatabasePort):
             for point in result[0]:
                 if not point.payload:
                     continue
+                
+                is_version_record = point.payload.get("is_version_record", False)
+                is_merge_record = point.payload.get("is_merge_record", False)
+                
+                if is_version_record or is_merge_record:
+                    logger.debug(f"Skipping version/merge record: {point.id}")
+                    continue
+                
                 chunk = self._payload_to_chunk(point.payload, UUID(str(point.id)))
                 chunks.append(chunk)
 
@@ -390,6 +406,235 @@ class QdrantDatabase(VectorDatabasePort):
         except Exception as e:
             logger.error(f"Failed to get chunks from '{collection_name}': {e}")
             return []
+
+    async def insert_chunk_version(self, collection_name: str, version: ChunkVersion) -> None:
+        try:
+            point_id = version.version_id
+            
+            vector = version.embedding
+            if not vector or len(vector) == 0:
+                vector = [0.0] * 512
+                logger.warning(f"Empty embedding for version {version.version_id}, using zero vector")
+            
+            self.client.upsert(
+                collection_name=collection_name,
+                points=[
+                    PointStruct(
+                        id=point_id,
+                        vector=vector,
+                        payload={
+                            "version_id": str(version.version_id),
+                            "chunk_id": str(version.chunk_id),
+                            "version": version.version,
+                            "content": version.content,
+                            "status": version.status.value,
+                            "quality": version.quality.value,
+                            "metadata": version.metadata.__dict__ if version.metadata else None,
+                            "created_at": version.created_at.isoformat(),
+                            "created_by": version.created_by,
+                            "is_version_record": True,
+                        },
+                    )
+                ],
+            )
+            logger.info(f"Inserted chunk version {version.version_id} for chunk {version.chunk_id}")
+        except Exception as e:
+            logger.error(f"Error inserting chunk version {version.version_id}: {e}")
+            raise
+
+    async def get_chunk_versions(self, collection_name: str, chunk_id: UUID) -> List[ChunkVersion]:
+        try:
+            results = self.client.scroll(
+                collection_name=collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="chunk_id",
+                            match=MatchValue(value=str(chunk_id)),
+                        ),
+                        FieldCondition(
+                            key="is_version_record",
+                            match=MatchValue(value=True),
+                        ),
+                    ]
+                ),
+                limit=100,
+                with_payload=True,
+                with_vectors=True,
+            )[0]
+            
+            versions = []
+            for point in results:
+                payload = point.payload
+                metadata = None
+                if payload.get("metadata"):
+                    metadata = ChunkMetadata(**payload["metadata"])
+                
+                version = ChunkVersion(
+                    version_id=UUID(payload["version_id"]),
+                    chunk_id=UUID(payload["chunk_id"]),
+                    version=payload["version"],
+                    content=payload["content"],
+                    embedding=point.vector,
+                    status=ChunkStatus(payload["status"]),
+                    quality=ChunkQuality(payload["quality"]),
+                    metadata=metadata,
+                    created_at=datetime.fromisoformat(payload["created_at"]),
+                    created_by=payload["created_by"],
+                )
+                versions.append(version)
+            
+            logger.info(f"Found {len(versions)} versions for chunk {chunk_id}")
+            return versions
+        except Exception as e:
+            logger.error(f"Error getting chunk versions for {chunk_id}: {e}")
+            raise
+
+    async def insert_merge_record(self, collection_name: str, record: ChunkMergeRecord) -> None:
+        try:
+            point_id = record.record_id
+            self.client.upsert(
+                collection_name=collection_name,
+                points=[
+                    PointStruct(
+                        id=point_id,
+                        vector=[0.0] * 512,
+                        payload={
+                            "record_id": str(record.record_id),
+                            "merge_type": record.merge_type,
+                            "source_chunk_ids": [str(id) for id in record.source_chunk_ids],
+                            "target_chunk_id": str(record.target_chunk_id),
+                            "previous_state": record.previous_state,
+                            "created_at": record.created_at.isoformat(),
+                            "created_by": record.created_by,
+                            "is_reversible": record.is_reversible,
+                            "is_merge_record": True,
+                        },
+                    )
+                ],
+            )
+            logger.info(f"Inserted merge record {record.record_id}")
+        except Exception as e:
+            logger.error(f"Error inserting merge record {record.record_id}: {e}")
+            raise
+
+    async def get_merge_record(self, collection_name: str, record_id: UUID) -> Optional[ChunkMergeRecord]:
+        try:
+            results = self.client.scroll(
+                collection_name=collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="record_id",
+                            match=MatchValue(value=str(record_id)),
+                        ),
+                        FieldCondition(
+                            key="is_merge_record",
+                            match=MatchValue(value=True),
+                        ),
+                    ]
+                ),
+                limit=1,
+                with_payload=True,
+                with_vectors=False,
+            )[0]
+            
+            if not results:
+                return None
+            
+            point = results[0]
+            payload = point.payload
+            
+            record = ChunkMergeRecord(
+                record_id=UUID(payload["record_id"]),
+                merge_type=payload["merge_type"],
+                source_chunk_ids=[UUID(id) for id in payload["source_chunk_ids"]],
+                target_chunk_id=UUID(payload["target_chunk_id"]),
+                previous_state=payload["previous_state"],
+                created_at=datetime.fromisoformat(payload["created_at"]),
+                created_by=payload["created_by"],
+                is_reversible=payload["is_reversible"],
+            )
+            
+            logger.info(f"Found merge record {record_id}")
+            return record
+        except Exception as e:
+            logger.error(f"Error getting merge record {record_id}: {e}")
+            raise
+
+    async def get_merge_records(
+        self,
+        collection_name: str,
+        document_id: Optional[str] = None,
+        chunk_id: Optional[UUID] = None,
+        limit: int = 100,
+    ) -> List[ChunkMergeRecord]:
+        try:
+            must_conditions = [
+                FieldCondition(
+                    key="is_merge_record",
+                    match=MatchValue(value=True),
+                )
+            ]
+            
+            if document_id:
+                must_conditions.append(
+                    FieldCondition(
+                        key="document_id",
+                        match=MatchValue(value=document_id),
+                    )
+                )
+            
+            if chunk_id:
+                results = self.client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=Filter(
+                        must=must_conditions,
+                        should=[
+                            FieldCondition(
+                                key="source_chunk_ids",
+                                match=MatchAny(any=[str(chunk_id)]),
+                            ),
+                            FieldCondition(
+                                key="target_chunk_id",
+                                match=MatchValue(value=str(chunk_id)),
+                            ),
+                        ]
+                    ),
+                    limit=limit,
+                    with_payload=True,
+                    with_vectors=False,
+                )[0]
+            else:
+                results = self.client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=Filter(must=must_conditions),
+                    limit=limit,
+                    with_payload=True,
+                    with_vectors=False,
+                )[0]
+            
+            records = []
+            for point in results:
+                payload = point.payload
+                
+                record = ChunkMergeRecord(
+                    record_id=UUID(payload["record_id"]),
+                    merge_type=payload["merge_type"],
+                    source_chunk_ids=[UUID(id) for id in payload["source_chunk_ids"]],
+                    target_chunk_id=UUID(payload["target_chunk_id"]),
+                    previous_state=payload["previous_state"],
+                    created_at=datetime.fromisoformat(payload["created_at"]),
+                    created_by=payload["created_by"],
+                    is_reversible=payload["is_reversible"],
+                )
+                records.append(record)
+            
+            logger.info(f"Found {len(records)} merge records")
+            return records
+        except Exception as e:
+            logger.error(f"Error getting merge records: {e}")
+            raise
 
 
 qdrant_db = QdrantDatabase()
