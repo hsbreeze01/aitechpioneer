@@ -34,7 +34,9 @@ class LocalEmbeddingService(EmbeddingServicePort):
             logger.info("Model loaded successfully")
 
     async def generate_embedding(self, text: str) -> List[float]:
+        logger.info(f"Generating embedding for text (length: {len(text)})")
         embeddings = await self.generate_embeddings([text])
+        logger.info(f"Generated embedding with dimension: {len(embeddings[0])}")
         return embeddings[0]
 
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:

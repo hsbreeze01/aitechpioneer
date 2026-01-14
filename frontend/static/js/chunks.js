@@ -179,25 +179,26 @@ async function loadChunks() {
         
         chunksList.innerHTML = chunks.map(chunk => {
             const adjacent = getAdjacentChunks(chunk.chunk_id);
-            const prevButton = adjacent.prev && adjacent.prev.document_id === chunk.document_id 
+            const isActive = chunk.status === 'active';
+            const prevButton = isActive && adjacent.prev && adjacent.prev.document_id === chunk.document_id && adjacent.prev.status === 'active'
                 ? `<button class="btn btn-small btn-merge" onclick="mergeWithAdjacent('${chunk.chunk_id}', '${adjacent.prev.chunk_id}')" title="与前一个Chunk合并">↑ 合并</button>` 
                 : '';
-            const nextButton = adjacent.next && adjacent.next.document_id === chunk.document_id 
+            const nextButton = isActive && adjacent.next && adjacent.next.document_id === chunk.document_id && adjacent.next.status === 'active'
                 ? `<button class="btn btn-small btn-merge" onclick="mergeWithAdjacent('${chunk.chunk_id}', '${adjacent.next.chunk_id}')" title="与后一个Chunk合并">↓ 合并</button>` 
                 : '';
             const mergeButtons = (prevButton || nextButton) 
                 ? `<div class="chunk-merge-actions">${prevButton}${nextButton}</div>` 
                 : '';
             
-            const undoMergeButton = chunk.merged_from && chunk.merged_from.length > 0
+            const undoMergeButton = isActive && chunk.derived_from && chunk.derived_from.length > 0
                 ? `<button class="btn btn-small btn-undo" onclick="undoMerge('${chunk.chunk_id}')" title="撤销合并">↩ 撤销合并</button>`
                 : '';
             
-            const mergeForwardButton = adjacent.next && adjacent.next.document_id === chunk.document_id
+            const mergeForwardButton = isActive && adjacent.next && adjacent.next.document_id === chunk.document_id && adjacent.next.status === 'active'
                 ? `<button class="btn btn-small btn-merge-forward" onclick="mergeForward('${chunk.chunk_id}')" title="向前合并（与后一个Chunk）">→ 向前合并</button>`
                 : '';
             
-            const mergeBackwardButton = adjacent.prev && adjacent.prev.document_id === chunk.document_id
+            const mergeBackwardButton = isActive && adjacent.prev && adjacent.prev.document_id === chunk.document_id && adjacent.prev.status === 'active'
                 ? `<button class="btn btn-small btn-merge-backward" onclick="mergeBackward('${chunk.chunk_id}')" title="向后合并（与前一个Chunk）">← 向后合并</button>`
                 : '';
             

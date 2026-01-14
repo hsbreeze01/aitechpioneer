@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from aitechpioneer.domain.models import Chunk, ChunkStatus
+from aitechpioneer.domain.models import Chunk, ChunkStatus, ChunkVersion, ChunkMergeRecord
 
 
 class VectorDatabasePort(ABC):
@@ -55,6 +55,32 @@ class VectorDatabasePort(ABC):
 
     @abstractmethod
     async def get_document(self, collection_name: str, document_id: str) -> Optional[Dict]:
+        pass
+
+    @abstractmethod
+    async def insert_chunk_version(self, collection_name: str, version: ChunkVersion) -> None:
+        pass
+
+    @abstractmethod
+    async def get_chunk_versions(self, collection_name: str, chunk_id: UUID) -> List[ChunkVersion]:
+        pass
+
+    @abstractmethod
+    async def insert_merge_record(self, collection_name: str, record: ChunkMergeRecord) -> None:
+        pass
+
+    @abstractmethod
+    async def get_merge_record(self, collection_name: str, record_id: UUID) -> Optional[ChunkMergeRecord]:
+        pass
+
+    @abstractmethod
+    async def get_merge_records(
+        self,
+        collection_name: str,
+        document_id: Optional[str] = None,
+        chunk_id: Optional[UUID] = None,
+        limit: int = 100,
+    ) -> List[ChunkMergeRecord]:
         pass
 
 
