@@ -31,14 +31,27 @@ async function loadStats() {
         const totalChunks = chunks.length;
         const activeChunks = chunks.filter(c => c.status === 'active').length;
         
-        document.getElementById('total-documents').textContent = totalDocuments;
-        document.getElementById('total-chunks').textContent = totalChunks;
-        document.getElementById('active-chunks').textContent = activeChunks;
+        const totalDocumentsEl = document.getElementById('total-documents');
+        const totalChunksEl = document.getElementById('total-chunks');
+        const activeChunksEl = document.getElementById('active-chunks');
+        
+        if (totalDocumentsEl) totalDocumentsEl.textContent = totalDocuments;
+        if (totalChunksEl) totalChunksEl.textContent = totalChunks;
+        if (activeChunksEl) activeChunksEl.textContent = activeChunks;
     } catch (error) {
         console.error('加载统计数据失败:', error);
+        const totalDocumentsEl = document.getElementById('total-documents');
+        const totalChunksEl = document.getElementById('total-chunks');
+        const activeChunksEl = document.getElementById('active-chunks');
+        
+        if (totalDocumentsEl) totalDocumentsEl.textContent = '-';
+        if (totalChunksEl) totalChunksEl.textContent = '-';
+        if (activeChunksEl) activeChunksEl.textContent = '-';
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     loadStats();
+    
+    setInterval(loadStats, 30000);
 });

@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG 系统首页</title>
+    <meta name="description" content="基于 RAG 技术的智能文档检索与问答平台">
+    <title>RAG 系统 - 智能文档问答</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <header class="header">
+        <header class="header" role="banner">
             <div class="header-content">
-                <h1 class="logo">RAG 系统</h1>
-                <nav class="nav">
-                    <a href="/index.html" class="nav-link active">首页</a>
+                <a href="/index.html" class="logo" aria-label="RAG 系统首页">
+                    <span class="logo-text">RAG 系统</span>
+                </a>
+                <nav class="nav" role="navigation" aria-label="主导航">
+                    <a href="/index.html" class="nav-link active" aria-current="page">首页</a>
                     <a href="/documents.html" class="nav-link">文档管理</a>
                     <a href="/upload.html" class="nav-link">上传文档</a>
                     <a href="/qa.html" class="nav-link">智能问答</a>
@@ -23,9 +26,9 @@
             </div>
         </header>
 
-        <main class="main">
+        <main class="main" role="main">
             <section class="hero">
-                <h2 class="hero-title">智能文档问答系统</h2>
+                <h1 class="hero-title">智能文档问答系统</h1>
                 <p class="hero-subtitle">基于 RAG 技术的智能文档检索与问答平台</p>
                 <div class="hero-actions">
                     <a href="/upload.html" class="btn btn-primary">上传文档</a>
@@ -72,8 +75,10 @@
             </section>
         </main>
 
-        <footer class="footer">
-            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        <footer class="footer" role="contentinfo">
+            <div class="footer-content">
+                <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+            </div>
         </footer>
     </div>
 

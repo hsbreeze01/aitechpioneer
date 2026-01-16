@@ -3,100 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="基于您的文档库，提出问题并获得准确答案">
     <title>智能问答 - RAG 系统</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <header class="header">
+        <header class="header" role="banner">
             <div class="header-content">
-                <h1 class="logo">RAG 系统</h1>
-                <nav class="nav">
+                <a href="/index.html" class="logo" aria-label="RAG 系统首页">
+                    <span class="logo-text">RAG 系统</span>
+                </a>
+                <nav class="nav" role="navigation" aria-label="主导航">
                     <a href="/index.html" class="nav-link">首页</a>
                     <a href="/documents.html" class="nav-link">文档管理</a>
                     <a href="/upload.html" class="nav-link">上传文档</a>
-                    <a href="/qa.html" class="nav-link active">智能问答</a>
+                    <a href="/qa.html" class="nav-link active" aria-current="page">智能问答</a>
                 </nav>
             </div>
         </header>
 
-        <main class="main">
-            <section class="qa-section">
-                <h2 class="section-title">智能问答</h2>
-                <p class="section-description">基于您的文档库，提出问题并获得准确答案</p>
+        <main class="main" role="main">
+            <section class="qa-section" aria-labelledby="qa-title">
+                <div class="section-header">
+                    <h1 id="qa-title" class="section-title">智能问答</h1>
+                    <p class="section-description">基于您的文档库，提出问题并获得准确答案</p>
+                </div>
 
                 <div class="qa-container">
                     <div class="qa-input">
                         <div class="input-wrapper">
-                            <input type="text" id="questionInput" class="qa-input-field" placeholder="输入您的问题...">
-                            <button id="askBtn" class="btn btn-primary">提问</button>
+                            <label for="questionInput" class="visually-hidden">输入您的问题</label>
+                            <input type="text" id="questionInput" class="qa-input-field" placeholder="输入您的问题..." aria-describedby="question-help">
+                            <span id="question-help" class="visually-hidden">输入您想要询问的问题，系统将基于您的文档库提供答案</span>
+                            <button id="askBtn" class="btn btn-primary" aria-label="提交问题">
+                                <span class="btn-icon">💬</span>
+                                <span class="btn-text">提问</span>
+                            </button>
                         </div>
-                        <div class="qa-options">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="useContext" checked>
-                                <span>使用上下文</span>
-                            </label>
-                            <div class="form-group-inline">
-                                <label class="form-label">Top K:</label>
-                                <input type="number" id="topK" class="form-input-small" value="5" min="1" max="20">
+                        <fieldset class="qa-options">
+                            <legend class="visually-hidden">问答选项</legend>
+                            <div class="option-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="useContext" checked>
+                                    <span>使用上下文</span>
+                                </label>
                             </div>
-                            <div class="form-group-inline">
-                                <label class="form-label">相似度阈值:</label>
-                                <select id="scoreThreshold" class="form-input-small">
+                            <div class="option-group">
+                                <label for="topK" class="form-label">Top K:</label>
+                                <input type="number" id="topK" class="form-input-small" value="5" min="1" max="20" aria-describedby="topK-help">
+                                <span id="topK-help" class="visually-hidden">返回相关文档块的数量，范围1-20</span>
+                            </div>
+                            <div class="option-group">
+                                <label for="scoreThreshold" class="form-label">相似度阈值:</label>
+                                <select id="scoreThreshold" class="form-input-small" aria-describedby="threshold-help">
                                     <option value="0.3">0.3</option>
                                     <option value="0.4">0.4</option>
                                     <option value="0.5" selected>0.5</option>
                                     <option value="0.6">0.6</option>
                                     <option value="0.7">0.7</option>
                                 </select>
+                                <span id="threshold-help" class="visually-hidden">文档相似度的最低要求，值越高匹配越严格</span>
                             </div>
-                        </div>
+                        </fieldset>
                     </div>
 
-                    <div id="answerSection" class="answer-section hidden">
+                    <div id="answerSection" class="answer-section hidden" role="region" aria-live="polite">
                         <div class="answer-header">
-                            <h3 class="answer-title">答案</h3>
-                            <button id="clearAnswer" class="btn btn-secondary btn-small">清除</button>
+                            <h2 class="answer-title">答案</h2>
+                            <button id="clearAnswer" class="btn btn-secondary btn-small" aria-label="清除当前答案">清除</button>
                         </div>
-                        <div id="answerContent" class="answer-content">
-                            <div class="loading">正在思考...</div>
+                        <div id="answerContent" class="answer-content" aria-live="polite">
+                            <div class="loading" role="status" aria-label="正在生成答案">正在思考...</div>
                         </div>
                         <div id="answerSources" class="answer-sources hidden">
-                            <h4 class="sources-title">相关来源</h4>
-                            <div id="sourcesList" class="sources-list"></div>
+                            <h3 class="sources-title">相关来源</h3>
+                            <ul id="sourcesList" class="sources-list" role="list"></ul>
                         </div>
                         <div id="feedbackSection" class="feedback-section hidden">
-                            <h4 class="feedback-title">您对这个答案满意吗？</h4>
-                            <div class="feedback-buttons">
-                                <button id="feedbackSatisfied" class="btn btn-success btn-small">满意</button>
-                                <button id="feedbackUnsatisfied" class="btn btn-danger btn-small">不满意</button>
+                            <h3 class="feedback-title">您对这个答案满意吗？</h3>
+                            <div class="feedback-buttons" role="group" aria-label="反馈选项">
+                                <button id="feedbackSatisfied" class="btn btn-success btn-small" aria-label="我对这个答案满意">
+                                    <span class="btn-icon">👍</span>
+                                    <span class="btn-text">满意</span>
+                                </button>
+                                <button id="feedbackUnsatisfied" class="btn btn-danger btn-small" aria-label="我对这个答案不满意">
+                                    <span class="btn-icon">👎</span>
+                                    <span class="btn-text">不满意</span>
+                                </button>
                             </div>
-                            <div id="feedbackForm" class="feedback-form hidden">
+                            <div id="feedbackForm" class="feedback-form hidden" role="form" aria-labelledby="feedback-form-title">
+                                <h4 id="feedback-form-title" class="visually-hidden">详细反馈表单</h4>
                                 <div class="form-group">
-                                    <label class="form-label">评分 (1-5):</label>
-                                    <select id="feedbackRating" class="form-input">
+                                    <label for="feedbackRating" class="form-label">评分 (1-5):</label>
+                                    <select id="feedbackRating" class="form-input" aria-describedby="rating-help">
                                         <option value="5">5 - 非常满意</option>
                                         <option value="4">4 - 满意</option>
                                         <option value="3">3 - 一般</option>
                                         <option value="2">2 - 不满意</option>
                                         <option value="1">1 - 非常不满意</option>
                                     </select>
+                                    <span id="rating-help" class="visually-hidden">请为答案质量评分，5分最高，1分最低</span>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">是否解决了您的问题？</label>
-                                    <select id="feedbackResolved" class="form-input">
+                                    <label for="feedbackResolved" class="form-label">是否解决了您的问题？</label>
+                                    <select id="feedbackResolved" class="form-input" aria-describedby="resolved-help">
                                         <option value="true">是，解决了</option>
                                         <option value="false">否，未解决</option>
                                     </select>
+                                    <span id="resolved-help" class="visually-hidden">请选择答案是否解决了您的问题</span>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">评论 (可选):</label>
-                                    <textarea id="feedbackComment" class="form-textarea" rows="3" placeholder="请告诉我们您的想法..."></textarea>
+                                    <label for="feedbackComment" class="form-label">评论 (可选):</label>
+                                    <textarea id="feedbackComment" class="form-textarea" rows="3" placeholder="请告诉我们您的想法..." aria-describedby="comment-help"></textarea>
+                                    <span id="comment-help" class="visually-hidden">您可以提供额外的评论或建议</span>
                                 </div>
                                 <div class="feedback-actions">
-                                    <button id="submitFeedback" class="btn btn-primary">提交反馈</button>
-                                    <button id="cancelFeedback" class="btn btn-secondary">取消</button>
+                                    <button id="submitFeedback" class="btn btn-primary" type="button">
+                                        <span class="btn-icon">✓</span>
+                                        <span class="btn-text">提交反馈</span>
+                                    </button>
+                                    <button id="cancelFeedback" class="btn btn-secondary" type="button">取消</button>
                                 </div>
                             </div>
                         </div>
@@ -104,27 +132,34 @@
 
                     <div id="qaRecordsSection" class="qa-records-section">
                         <div class="qa-records-header">
-                            <h3 class="qa-records-title">问答历史</h3>
+                            <h2 class="qa-records-title">问答历史</h2>
                             <div class="qa-records-actions">
-                                <select id="qaRecordsFilter" class="select-input">
+                                <label for="qaRecordsFilter" class="visually-hidden">筛选问答记录</label>
+                                <select id="qaRecordsFilter" class="select-input" aria-describedby="filter-help">
                                     <option value="all">全部记录</option>
                                     <option value="today">今天</option>
                                     <option value="week">最近一周</option>
                                 </select>
-                                <button id="loadQaRecords" class="btn btn-small btn-primary">加载记录</button>
+                                <span id="filter-help" class="visually-hidden">选择要显示的问答记录时间范围</span>
+                                <button id="loadQaRecords" class="btn btn-small btn-primary" aria-label="加载问答记录">
+                                    <span class="btn-icon">🔄</span>
+                                    <span class="btn-text">加载记录</span>
+                                </button>
                             </div>
                         </div>
-                        <div id="qaRecordsStats" class="qa-records-stats"></div>
-                        <div id="qaRecordsList" class="qa-records-list">
-                            <div class="empty-qa-records">暂无问答记录</div>
+                        <div id="qaRecordsStats" class="qa-records-stats" aria-live="polite"></div>
+                        <div id="qaRecordsList" class="qa-records-list" role="list">
+                            <div class="empty-qa-records" role="status">暂无问答记录</div>
                         </div>
                     </div>
                 </div>
             </section>
         </main>
 
-        <footer class="footer">
-            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        <footer class="footer" role="contentinfo">
+            <div class="footer-content">
+                <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+            </div>
         </footer>
     </div>
 
