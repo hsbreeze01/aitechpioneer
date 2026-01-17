@@ -44,19 +44,19 @@ async function loadDocuments() {
                 </div>
                 <div class="document-meta-vertical">
                     <div class="meta-row">
-                        <span class="meta-label">📄 文件名:</span>
+                        <span class="meta-label"><img src="/static/icons/document.svg" alt="" class="meta-icon-svg" aria-hidden="true"> 文件名:</span>
                         <span class="meta-value">${escapeHtml(doc.file_name)}</span>
                     </div>
                     <div class="meta-row">
-                        <span class="meta-label">📁 文件类型:</span>
+                        <span class="meta-label"><img src="/static/icons/document.svg" alt="" class="meta-icon-svg" aria-hidden="true"> 文件类型:</span>
                         <span class="meta-value">${escapeHtml(doc.file_type)}</span>
                     </div>
                     <div class="meta-row">
-                        <span class="meta-label">📅 上传时间:</span>
+                        <span class="meta-label"><img src="/static/icons/clipboard.svg" alt="" class="meta-icon-svg" aria-hidden="true"> 上传时间:</span>
                         <span class="meta-value">${formatDate(doc.uploaded_at)}</span>
                     </div>
                     <div class="meta-row">
-                        <span class="meta-label">🧩 Chunk数量:</span>
+                        <span class="meta-label"><img src="/static/icons/document-plus.svg" alt="" class="meta-icon-svg" aria-hidden="true"> Chunk数量:</span>
                         <span class="meta-value">${doc.chunk_count}</span>
                     </div>
                 </div>

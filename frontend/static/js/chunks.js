@@ -202,7 +202,7 @@ async function loadChunks() {
                 ? `<button class="btn btn-small btn-merge-backward" onclick="mergeBackward('${chunk.chunk_id}')" title="向后合并（与前一个Chunk）">← 向后合并</button>`
                 : '';
             
-            const semanticResegmentButton = `<button class="btn btn-small btn-semantic" onclick="semanticResegment('${chunk.document_id}')" title="语义重切分整个文档">🔄 语义重切分</button>`;
+            const semanticResegmentButton = `<button class="btn btn-small btn-semantic" onclick="semanticResegment('${chunk.document_id}')" title="语义重切分整个文档"><img src="/static/icons/refresh.svg" alt="" class="btn-icon-svg"> 语义重切分</button>`;
             
             return `
             <div class="chunk-card" data-chunk-id="${chunk.chunk_id}">
@@ -232,24 +232,24 @@ async function loadChunks() {
                 </div>
                 <div class="chunk-meta">
                     <div class="meta-item">
-                        <span>📄</span>
+                        <img src="/static/icons/document.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>文档 ID: ${escapeHtml(chunk.document_id.substring(0, 8))}...</span>
                     </div>
                     <div class="meta-item">
-                        <span>📊</span>
+                        <img src="/static/icons/settings.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>质量: ${escapeHtml(chunk.quality)}</span>
                     </div>
                     <div class="meta-item">
-                        <span>🔢</span>
+                        <img src="/static/icons/clipboard.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>版本: ${chunk.version}</span>
                     </div>
                     <div class="meta-item">
-                        <span>📍</span>
+                        <img src="/static/icons/link.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>位置: ${chunk.start_index} - ${chunk.end_index}</span>
                     </div>
                     ${chunk.derived_from && chunk.derived_from.length > 0 ? `
                     <div class="meta-item">
-                        <span>🔗</span>
+                        <img src="/static/icons/link.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>衍生自: ${chunk.derived_from.map(id => id.substring(0, 8)).join(', ')}...</span>
                     </div>
                     ` : ''}

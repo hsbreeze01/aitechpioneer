@@ -27,49 +27,59 @@
         </header>
 
         <main class="main" role="main">
-            <section class="hero">
-                <h1 class="hero-title">智能文档问答系统</h1>
+            <section class="hero" aria-labelledby="hero-title">
+                <h1 id="hero-title" class="hero-title">智能文档问答系统</h1>
                 <p class="hero-subtitle">基于 RAG 技术的智能文档检索与问答平台</p>
-                <div class="hero-actions">
-                    <a href="/upload.html" class="btn btn-primary">上传文档</a>
-                    <a href="/qa.html" class="btn btn-secondary">开始问答</a>
+                <div class="hero-actions" role="group" aria-label="主要操作">
+                    <a href="/upload.html" class="btn btn-primary" aria-label="上传文档">上传文档</a>
+                    <a href="/qa.html" class="btn btn-secondary" aria-label="开始问答">开始问答</a>
                 </div>
             </section>
 
-            <section class="features">
-                <div class="feature-card">
-                    <div class="feature-icon">📄</div>
+            <section class="features" aria-labelledby="features-title">
+                <h2 id="features-title" class="visually-hidden">核心功能</h2>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true">
+                        <img src="/static/icons/document.svg" alt="" class="icon-svg">
+                    </div>
                     <h3 class="feature-title">文档管理</h3>
                     <p class="feature-description">支持 PDF、TXT、Markdown、DOCX 等多种格式文档上传和管理</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔍</div>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true">
+                        <img src="/static/icons/search.svg" alt="" class="icon-svg">
+                    </div>
                     <h3 class="feature-title">智能检索</h3>
                     <p class="feature-description">基于向量数据库的高效语义检索，快速找到相关内容</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🤖</div>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true">
+                        <img src="/static/icons/chat.svg" alt="" class="icon-svg">
+                    </div>
                     <h3 class="feature-title">智能问答</h3>
                     <p class="feature-description">结合 DeepSeek LLM，提供准确、上下文相关的答案</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚙️</div>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true">
+                        <img src="/static/icons/settings.svg" alt="" class="icon-svg">
+                    </div>
                     <h3 class="feature-title">Chunk 管理</h3>
                     <p class="feature-description">灵活的文档分块管理，支持编辑、合并和状态控制</p>
-                </div>
+                </article>
             </section>
 
-            <section class="stats">
+            <section class="stats" aria-labelledby="stats-title">
+                <h2 id="stats-title" class="visually-hidden">系统统计</h2>
                 <div class="stat-item">
-                    <div class="stat-value" id="total-documents">0</div>
+                    <div class="stat-value" id="total-documents" aria-live="polite">0</div>
                     <div class="stat-label">文档总数</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value" id="total-chunks">0</div>
+                    <div class="stat-value" id="total-chunks" aria-live="polite">0</div>
                     <div class="stat-label">Chunk 总数</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value" id="active-chunks">0</div>
+                    <div class="stat-value" id="active-chunks" aria-live="polite">0</div>
                     <div class="stat-label">活跃 Chunk</div>
                 </div>
             </section>

@@ -106,24 +106,24 @@ function loadChunks(filter = 'all') {
             </div>
             <div class="chunk-meta">
                 <div class="meta-item">
-                    <span>📍</span>
+                    <img src="/static/icons/link.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                     <span>位置: ${chunk.start_index} - ${chunk.end_index}</span>
                 </div>
                 <div class="meta-item">
-                    <span>📊</span>
+                    <img src="/static/icons/settings.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                     <span>质量: <span class="quality-badge quality-${chunk.quality}">${getQualityLabel(chunk.quality)}</span></span>
                 </div>
                 <div class="meta-item">
-                    <span>🏷️</span>
+                    <img src="/static/icons/document-plus.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                     <span>状态: <span class="status-badge status-${chunk.status}">${getStatusLabel(chunk.status)}</span></span>
                 </div>
                 <div class="meta-item">
-                    <span>🔢</span>
+                    <img src="/static/icons/clipboard.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                     <span>版本: ${chunk.version}</span>
                 </div>
                 ${chunk.deletion_reason ? `
                 <div class="meta-item">
-                    <span>🗑️</span>
+                    <img src="/static/icons/settings.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                     <span>删除原因: ${getDeletionReasonLabel(chunk.deletion_reason)}</span>
                 </div>
                 ` : ''}

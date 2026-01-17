@@ -38,7 +38,7 @@
                             <input type="text" id="questionInput" class="qa-input-field" placeholder="输入您的问题..." aria-describedby="question-help">
                             <span id="question-help" class="visually-hidden">输入您想要询问的问题，系统将基于您的文档库提供答案</span>
                             <button id="askBtn" class="btn btn-primary" aria-label="提交问题">
-                                <span class="btn-icon">💬</span>
+                                <img src="/static/icons/send.svg" alt="发送" class="btn-icon-svg">
                                 <span class="btn-text">提问</span>
                             </button>
                         </div>
@@ -85,11 +85,11 @@
                             <h3 class="feedback-title">您对这个答案满意吗？</h3>
                             <div class="feedback-buttons" role="group" aria-label="反馈选项">
                                 <button id="feedbackSatisfied" class="btn btn-success btn-small" aria-label="我对这个答案满意">
-                                    <span class="btn-icon">👍</span>
+                                    <img src="/static/icons/thumb-up.svg" alt="满意" class="btn-icon-svg">
                                     <span class="btn-text">满意</span>
                                 </button>
                                 <button id="feedbackUnsatisfied" class="btn btn-danger btn-small" aria-label="我对这个答案不满意">
-                                    <span class="btn-icon">👎</span>
+                                    <img src="/static/icons/thumb-down.svg" alt="不满意" class="btn-icon-svg">
                                     <span class="btn-text">不满意</span>
                                 </button>
                             </div>
@@ -120,11 +120,11 @@
                                     <span id="comment-help" class="visually-hidden">您可以提供额外的评论或建议</span>
                                 </div>
                                 <div class="feedback-actions">
-                                    <button id="submitFeedback" class="btn btn-primary" type="button">
-                                        <span class="btn-icon">✓</span>
+                                    <button id="submitFeedback" class="btn btn-primary" type="button" aria-label="提交反馈">
+                                        <img src="/static/icons/check-circle.svg" alt="" class="btn-icon-svg">
                                         <span class="btn-text">提交反馈</span>
                                     </button>
-                                    <button id="cancelFeedback" class="btn btn-secondary" type="button">取消</button>
+                                    <button id="cancelFeedback" class="btn btn-secondary" type="button" aria-label="取消反馈">取消</button>
                                 </div>
                             </div>
                         </div>
@@ -142,7 +142,7 @@
                                 </select>
                                 <span id="filter-help" class="visually-hidden">选择要显示的问答记录时间范围</span>
                                 <button id="loadQaRecords" class="btn btn-small btn-primary" aria-label="加载问答记录">
-                                    <span class="btn-icon">🔄</span>
+                                    <img src="/static/icons/refresh.svg" alt="" class="btn-icon-svg">
                                     <span class="btn-text">加载记录</span>
                                 </button>
                             </div>

@@ -95,7 +95,9 @@ async function loadUploadTasks() {
         console.error('获取任务列表失败:', error);
         uploadTasksList.innerHTML = `
             <div class="empty-tasks">
-                <div class="empty-icon">⚠️</div>
+                <div class="empty-icon">
+                    <img src="/static/icons/settings.svg" alt="" class="icon-svg-large" aria-hidden="true">
+                </div>
                 <p class="empty-text">获取任务列表失败</p>
             </div>
         `;
@@ -107,7 +109,9 @@ function renderUploadTasks(tasks) {
     if (!tasks || tasks.length === 0) {
         uploadTasksList.innerHTML = `
             <div class="empty-tasks">
-                <div class="empty-icon">📋</div>
+                <div class="empty-icon">
+                    <img src="/static/icons/document.svg" alt="" class="icon-svg-large" aria-hidden="true">
+                </div>
                 <p class="empty-text">暂无上传任务</p>
             </div>
         `;
@@ -244,13 +248,13 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadArea.addEventListener('dragover', (e) => {
         console.log('Drag over event');
         e.preventDefault();
-        uploadArea.style.borderColor = '#6366f1';
-        uploadArea.style.background = '#f8fafc';
+        uploadArea.style.borderColor = 'var(--primary)';
+        uploadArea.style.background = 'var(--bg-secondary)';
     });
 
     uploadArea.addEventListener('dragleave', (e) => {
         console.log('Drag leave event');
-        uploadArea.style.borderColor = '#e2e8f0';
+        uploadArea.style.borderColor = 'var(--border-color)';
         uploadArea.style.background = 'transparent';
     });
 

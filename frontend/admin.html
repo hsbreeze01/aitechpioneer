@@ -27,7 +27,7 @@
                 <div class="section-header">
                     <h2 class="section-title">不满意的问答记录</h2>
                     <div class="section-actions">
-                        <button id="refreshButton" class="btn btn-small btn-primary">刷新</button>
+                        <button id="refreshButton" class="btn btn-small btn-primary" aria-label="刷新记录">刷新</button>
                         <a href="/chunks.html" class="btn btn-small btn-secondary">去 Chunk 管理</a>
                     </div>
                 </div>
@@ -37,7 +37,9 @@
                 </div>
 
                 <div id="emptyState" class="empty-state hidden">
-                    <div class="empty-icon">✅</div>
+                    <div class="empty-icon">
+                        <img src="/static/icons/check-circle.svg" alt="" class="icon-svg-large" aria-hidden="true">
+                    </div>
                     <h3 class="empty-title">暂无不满意的记录</h3>
                     <p class="empty-description">所有用户都对答案满意，系统运行良好！</p>
                 </div>

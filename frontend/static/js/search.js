@@ -50,7 +50,9 @@ async function performSearch() {
         if (chunks.length === 0) {
             searchResults.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-icon">🔍</div>
+                    <div class="empty-icon">
+                        <img src="/static/icons/search.svg" alt="" class="icon-svg-large" aria-hidden="true">
+                    </div>
                     <h3 class="empty-title">未找到相关内容</h3>
                     <p class="empty-description">尝试使用不同的关键词或调整相似度阈值</p>
                 </div>
@@ -74,15 +76,15 @@ async function performSearch() {
                 </div>
                 <div class="result-meta">
                     <div class="meta-item">
-                        <span>📄</span>
+                        <img src="/static/icons/document.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>${escapeHtml(source.metadata?.source_file || '未知文档')}</span>
                     </div>
                     <div class="meta-item">
-                        <span>📊</span>
+                        <img src="/static/icons/settings.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>类型: ${escapeHtml(source.chunk_type || 'unknown')}</span>
                     </div>
                     <div class="meta-item">
-                        <span>🏷️</span>
+                        <img src="/static/icons/document-plus.svg" alt="" class="meta-icon-svg" aria-hidden="true">
                         <span>状态: ${escapeHtml(source.status || 'unknown')}</span>
                     </div>
                 </div>

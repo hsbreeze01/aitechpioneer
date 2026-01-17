@@ -9,79 +9,93 @@
 </head>
 <body>
     <div class="container">
-        <header class="header">
+        <header class="header" role="banner">
             <div class="header-content">
-                <h1 class="logo">RAG 系统</h1>
-                <nav class="nav">
+                <a href="/index.html" class="logo" aria-label="RAG 系统首页">
+                    <span class="logo-text">RAG 系统</span>
+                </a>
+                <nav class="nav" role="navigation" aria-label="主导航">
                     <a href="/index.html" class="nav-link">首页</a>
                     <a href="/documents.html" class="nav-link">文档管理</a>
                     <a href="/upload.html" class="nav-link">上传文档</a>
                     <a href="/qa.html" class="nav-link">智能问答</a>
-                    <a href="/search.html" class="nav-link active">智能检索</a>
+                    <a href="/search.html" class="nav-link active" aria-current="page">智能检索</a>
                     <a href="/chunks.html" class="nav-link">Chunk 管理</a>
                 </nav>
             </div>
         </header>
 
-        <main class="main">
-            <section class="search-section">
+        <main class="main" role="main">
+            <section class="search-section" aria-labelledby="search-title">
                 <div class="section-header">
-                    <h2 class="section-title">智能检索</h2>
+                    <h1 id="search-title" class="section-title">智能检索</h1>
+                    <p class="section-description">基于语义相似度快速检索相关内容</p>
                 </div>
 
-                <div class="search-box">
+                <div class="search-box" role="search">
+                    <label for="searchInput" class="visually-hidden">搜索关键词</label>
                     <input 
                         type="text" 
                         id="searchInput" 
                         class="search-input" 
                         placeholder="输入关键词或问题进行语义检索..."
+                        aria-describedby="search-help"
                     >
-                    <button id="searchButton" class="btn btn-primary">检索</button>
+                    <span id="search-help" class="visually-hidden">输入关键词或问题，系统将基于语义相似度检索相关内容</span>
+                    <button id="searchButton" class="btn btn-primary" aria-label="执行检索">检索</button>
                 </div>
 
-                <div class="search-options">
+                <fieldset class="search-options" aria-labelledby="options-title">
+                    <legend id="options-title" class="visually-hidden">检索选项</legend>
                     <div class="option-group">
-                        <label for="limitSelect">返回数量:</label>
-                        <select id="limitSelect" class="select-input">
+                        <label for="limitSelect" class="form-label">返回数量:</label>
+                        <select id="limitSelect" class="select-input" aria-describedby="limit-help">
                             <option value="5">5</option>
                             <option value="10">10</option>
                             <option value="15">15</option>
                             <option value="20">20</option>
                         </select>
+                        <span id="limit-help" class="visually-hidden">选择返回的相关文档块数量</span>
                     </div>
                     <div class="option-group">
-                        <label for="thresholdSelect">相似度阈值:</label>
-                        <select id="thresholdSelect" class="select-input">
+                        <label for="thresholdSelect" class="form-label">相似度阈值:</label>
+                        <select id="thresholdSelect" class="select-input" aria-describedby="threshold-help">
                             <option value="0.5">0.5</option>
                             <option value="0.6">0.6</option>
                             <option value="0.7" selected>0.7</option>
                             <option value="0.8">0.8</option>
                             <option value="0.9">0.9</option>
                         </select>
+                        <span id="threshold-help" class="visually-hidden">设置文档相似度的最低要求，值越高匹配越严格</span>
                     </div>
                     <div class="option-group">
-                        <label for="statusSelect">状态过滤:</label>
-                        <select id="statusSelect" class="select-input">
+                        <label for="statusSelect" class="form-label">状态过滤:</label>
+                        <select id="statusSelect" class="select-input" aria-describedby="status-help">
                             <option value="">全部</option>
                             <option value="active" selected>活跃</option>
                             <option value="deprecated">已弃用</option>
                             <option value="inactive">非活跃</option>
                         </select>
+                        <span id="status-help" class="visually-hidden">选择要检索的 Chunk 状态</span>
                     </div>
-                </div>
+                </fieldset>
 
-                <div id="searchResults" class="search-results">
-                    <div class="empty-state">
-                        <div class="empty-icon">🔍</div>
-                        <h3 class="empty-title">开始检索</h3>
+                <div id="searchResults" class="search-results" role="region" aria-live="polite" aria-atomic="true">
+                    <div class="empty-state" role="status">
+                        <div class="empty-icon" aria-hidden="true">
+                            <img src="/static/icons/search.svg" alt="" class="icon-svg-large">
+                        </div>
+                        <h2 class="empty-title">开始检索</h2>
                         <p class="empty-description">输入关键词或问题，系统将基于语义相似度检索相关内容</p>
                     </div>
                 </div>
             </section>
         </main>
 
-        <footer class="footer">
-            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        <footer class="footer" role="contentinfo">
+            <div class="footer-content">
+                <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+            </div>
         </footer>
     </div>
 

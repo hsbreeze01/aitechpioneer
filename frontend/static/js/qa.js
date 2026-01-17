@@ -47,8 +47,8 @@ function setLoading(loading) {
     if (askBtn) {
         askBtn.disabled = loading;
         askBtn.innerHTML = loading 
-            ? '<span class="btn-icon">⏳</span><span class="btn-text">思考中...</span>'
-            : '<span class="btn-icon">💬</span><span class="btn-text">提问</span>';
+            ? '<img src="/static/icons/refresh.svg" alt="" class="btn-icon-svg"><span class="btn-text">思考中...</span>'
+            : '<img src="/static/icons/send.svg" alt="" class="btn-icon-svg"><span class="btn-text">提问</span>';
     }
     
     if (questionInput) {
@@ -325,7 +325,7 @@ async function loadQaRecords() {
     } finally {
         if (loadQaRecordsBtn) {
             loadQaRecordsBtn.disabled = false;
-            loadQaRecordsBtn.innerHTML = '<span class="btn-icon">🔄</span><span class="btn-text">加载记录</span>';
+            loadQaRecordsBtn.innerHTML = '<img src="/static/icons/refresh.svg" alt="" class="btn-icon-svg"><span class="btn-text">加载记录</span>';
         }
     }
 }

@@ -9,72 +9,87 @@
 </head>
 <body>
     <div class="container">
-        <header class="header">
+        <header class="header" role="banner">
             <div class="header-content">
-                <h1 class="logo">RAG 系统</h1>
-                <nav class="nav">
+                <a href="/index.html" class="logo" aria-label="RAG 系统首页">
+                    <span class="logo-text">RAG 系统</span>
+                </a>
+                <nav class="nav" role="navigation" aria-label="主导航">
                     <a href="/index.html" class="nav-link">首页</a>
                     <a href="/documents.html" class="nav-link">文档管理</a>
-                    <a href="/upload.html" class="nav-link active">上传文档</a>
+                    <a href="/upload.html" class="nav-link active" aria-current="page">上传文档</a>
                     <a href="/qa.html" class="nav-link">智能问答</a>
+                    <a href="/search.html" class="nav-link">智能检索</a>
+                    <a href="/chunks.html" class="nav-link">Chunk 管理</a>
                 </nav>
             </div>
         </header>
 
-        <main class="main">
-            <section class="upload-section">
-                <h2 class="section-title">上传文档</h2>
-                <p class="section-description">支持 PDF、TXT、Markdown、DOCX 格式</p>
+        <main class="main" role="main">
+            <section class="upload-section" aria-labelledby="upload-title">
+                <div class="section-header">
+                    <h1 id="upload-title" class="section-title">上传文档</h1>
+                    <p class="section-description">支持 PDF、TXT、Markdown、DOCX 格式</p>
+                </div>
 
                 <div class="upload-container">
-                    <div class="upload-area" id="uploadArea">
-                        <div class="upload-icon">📤</div>
+                    <div class="upload-area" id="uploadArea" role="button" tabindex="0" aria-label="拖拽文件到此处或点击上传">
+                        <div class="upload-icon" aria-hidden="true">
+                            <img src="/static/icons/upload.svg" alt="" class="icon-svg-large">
+                        </div>
                         <p class="upload-text">拖拽文件到此处或点击上传</p>
                         <p class="upload-hint">支持 PDF、TXT、Markdown、DOCX 文件</p>
-                        <input type="file" id="fileInput" accept=".pdf,.txt,.md,.docx" hidden>
+                        <input type="file" id="fileInput" accept=".pdf,.txt,.md,.docx" hidden aria-describedby="file-help">
+                        <span id="file-help" class="visually-hidden">选择要上传的文件，支持的格式包括 PDF、TXT、Markdown 和 DOCX</span>
                     </div>
 
                     <div class="upload-options">
                         <div class="form-group">
-                            <label class="form-label">文档标题</label>
-                            <input type="text" id="documentTitle" class="form-input" placeholder="输入文档标题（可选）">
+                            <label for="documentTitle" class="form-label">文档标题</label>
+                            <input type="text" id="documentTitle" class="form-input" placeholder="输入文档标题（可选）" aria-describedby="title-help">
+                            <span id="title-help" class="visually-hidden">为文档设置一个自定义标题，留空则使用文件名</span>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">文档描述</label>
-                            <textarea id="documentDescription" class="form-textarea" placeholder="输入文档描述（可选）"></textarea>
+                            <label for="documentDescription" class="form-label">文档描述</label>
+                            <textarea id="documentDescription" class="form-textarea" placeholder="输入文档描述（可选）" rows="3" aria-describedby="desc-help"></textarea>
+                            <span id="desc-help" class="visually-hidden">为文档添加描述信息，帮助更好地组织和检索</span>
                         </div>
                     </div>
 
-                    <button id="uploadBtn" class="btn btn-primary btn-large">开始上传</button>
+                    <button id="uploadBtn" class="btn btn-primary btn-large" aria-label="开始上传文档">开始上传</button>
                 </div>
 
-                <div id="uploadProgress" class="upload-progress hidden">
-                    <div class="progress-bar">
+                <div id="uploadProgress" class="upload-progress hidden" role="status" aria-live="polite" aria-atomic="true">
+                    <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="上传进度">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
-                    <p class="progress-text" id="progressText">正在处理...</p>
+                    <p class="progress-text" id="progressText" aria-live="polite">正在处理...</p>
                 </div>
 
-                <div id="uploadResult" class="upload-result hidden">
+                <div id="uploadResult" class="upload-result hidden" role="alert" aria-live="assertive">
                     <div class="result-success">
-                        <div class="result-icon">✅</div>
-                        <h3 class="result-title">上传成功</h3>
+                        <div class="result-icon" aria-hidden="true">
+                            <img src="/static/icons/check-circle.svg" alt="" class="icon-svg-large">
+                        </div>
+                        <h2 class="result-title">上传成功</h2>
                         <p class="result-message" id="resultMessage"></p>
-                        <div class="result-actions">
-                            <a href="/documents.html" class="btn btn-secondary">查看文档</a>
-                            <button id="uploadAnother" class="btn btn-primary">上传更多</button>
+                        <div class="result-actions" role="group" aria-label="后续操作">
+                            <a href="/documents.html" class="btn btn-secondary" aria-label="查看文档列表">查看文档</a>
+                            <button id="uploadAnother" class="btn btn-primary" aria-label="上传更多文档">上传更多</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="upload-tasks-section">
+                <div class="upload-tasks-section" aria-labelledby="tasks-title">
                     <div class="tasks-header">
-                        <h3 class="tasks-title">上传任务列表</h3>
-                        <button id="refreshTasksBtn" class="btn btn-secondary btn-small">刷新</button>
+                        <h2 id="tasks-title" class="tasks-title">上传任务列表</h2>
+                        <button id="refreshTasksBtn" class="btn btn-secondary btn-small" aria-label="刷新任务列表">刷新</button>
                     </div>
-                    <div id="uploadTasksList" class="upload-tasks-list">
-                        <div class="empty-tasks">
-                            <div class="empty-icon">📋</div>
+                    <div id="uploadTasksList" class="upload-tasks-list" role="list" aria-live="polite">
+                        <div class="empty-tasks" role="status">
+                            <div class="empty-icon" aria-hidden="true">
+                                <img src="/static/icons/clipboard.svg" alt="" class="icon-svg-large">
+                            </div>
                             <p class="empty-text">暂无上传任务</p>
                         </div>
                     </div>
@@ -82,8 +97,10 @@
             </section>
         </main>
 
-        <footer class="footer">
-            <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+        <footer class="footer" role="contentinfo">
+            <div class="footer-content">
+                <p>&copy; 2025 RAG 系统. 基于 spec-workflow 驱动开发</p>
+            </div>
         </footer>
     </div>
 
